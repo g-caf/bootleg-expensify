@@ -166,15 +166,15 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     
     console.log('Extracted:', { vendor, amount, receiptDate });
     
-    // Create filename with proper format
-    let filename = '';
+    // Create output filename with proper format
+    let outputFilename = '';
     if (vendor && amount) {
       const dateStr = receiptDate || new Date().toISOString().split('T')[0];
-      filename = `${vendor}_${dateStr}_$${amount}.pdf`;
+      outputFilename = `${vendor}_${dateStr}_$${amount}.pdf`;
     } else {
       // Fallback naming
       const dateStr = receiptDate || new Date().toISOString().split('T')[0];
-      filename = `Receipt_${dateStr}.pdf`;
+      outputFilename = `Receipt_${dateStr}.pdf`;
     }
     
     // Force garbage collection if available
@@ -186,7 +186,7 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
       vendor, 
       amount,
       receiptDate,
-      filename,
+      filename: outputFilename,
       success: !!(vendor && amount),
       textLength: text.length
     });
