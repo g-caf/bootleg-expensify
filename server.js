@@ -30,10 +30,10 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Configure multer for file uploads with smaller limit
+// Configure multer for file uploads with much smaller limit
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 } // Reduced to 5MB limit
+  limits: { fileSize: 2 * 1024 * 1024 } // Reduced to 2MB limit
 });
 
 // Extract vendor from text
@@ -158,12 +158,12 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
       setTimeout(() => reject(new Error('PDF parsing timeout')), 30000);
     });
     
-    // Parse PDF with memory-efficient options
+    // Parse PDF with ultra memory-efficient options
     const parsePromise = pdf(req.file.buffer, {
       pagerender: false,  // Don't render pages, just extract text
-      normalizeWhitespace: true,
+      normalizeWhitespace: false,  // Disable to save memory
       disableCombineTextItems: true,
-      max: 3  // Only process first 3 pages for performance
+      max: 1  // Only process first page for extreme memory saving
     });
     
     const data = await Promise.race([parsePromise, timeoutPromise]);
