@@ -6,8 +6,7 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Increase memory limit for Node.js
-process.env.NODE_OPTIONS = '--max-old-space-size=512';
+// Memory limit is handled by package.json start script
 
 // CORS configuration for Chrome extensions
 app.use(cors({

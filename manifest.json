@@ -7,7 +7,8 @@
     "storage"
   ],
   "host_permissions": [
-    "https://bootleg-expensify.onrender.com/*"
+    "https://bootleg-expensify.onrender.com/*",
+    "https://*.onrender.com/*"
   ],
   "commands": {
     "_execute_action": {

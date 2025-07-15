@@ -78,6 +78,7 @@ class ExpenseGadget {
 
     async processReceipt(file) {
         console.log('=== START processReceipt ===');
+        console.log('🔥 NEW ERROR HANDLING CODE IS ACTIVE 🔥');
         console.log('File name:', file.name);
         console.log('File size:', file.size);
         console.log('File type:', file.type);
