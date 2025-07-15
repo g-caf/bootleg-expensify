@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const pdf = require('pdf-parse');
 const cors = require('cors');
 
 const app = express();
@@ -152,12 +153,32 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     
     console.log('Processing PDF:', req.file.originalname, 'Size:', req.file.size);
     
-    // For now, skip PDF parsing and use filename-based detection
-    console.log('PDF received, using filename-based extraction...');
+    // Parse PDF with minimal options to avoid memory issues
+    console.log('Parsing PDF with memory constraints...');
     
-    // Extract info from filename if possible
-    const filename = req.file.originalname.toLowerCase();
-    let text = filename;
+    let text = '';
+    try {
+      // Ultra-minimal PDF parsing to prevent memory crashes
+      const data = await pdf(req.file.buffer, {
+        max: 1,  // Only first page
+        version: 'v1.10.100'  // Use stable version
+      });
+      text = data.text || '';
+      console.log('PDF parsed successfully, text length:', text.length);
+      
+      // Clear buffer immediately
+      req.file.buffer = null;
+      
+      // Force garbage collection
+      if (global.gc) {
+        global.gc();
+      }
+      
+    } catch (pdfError) {
+      console.error('PDF parsing failed, using filename fallback:', pdfError.message);
+      // Fallback to filename-based detection
+      text = req.file.originalname.toLowerCase();
+    }
     
     // Extract vendor, amount, and date
     const vendor = extractVendor(text);
