@@ -97,10 +97,15 @@ class ExpenseGadget {
             
             try {
                 console.log('About to make fetch request...');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+                
                 const response = await fetch('https://bootleg-expensify.onrender.com/parse-receipt', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
                 console.log('Fetch request completed, response status:', response.status);
                 
                 if (!response.ok) {
@@ -130,13 +135,28 @@ Some details couldn't be extracted automatically.`, 'warning');
                 
             } catch (error) {
                 console.error('Server processing failed:', error);
+                console.error('Error type:', error.constructor.name);
+                console.error('Error stack:', error.stack);
+                
+                let errorMessage = '';
+                if (error.name === 'AbortError') {
+                    errorMessage = '❌ Request timed out (60s limit exceeded)';
+                } else if (error.message.includes('CORS')) {
+                    errorMessage = '❌ CORS error - permission issue';
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMessage = '❌ Network error - cannot reach server';
+                } else {
+                    errorMessage = `❌ Server error: ${error.message}`;
+                }
+                
+                this.showStatus(`${errorMessage}
+Details: ${error.toString()}
+Check console for more info.`, 'error');
+                
                 // Fallback to simple renaming
                 const today = new Date().toISOString().split('T')[0];
                 const newFileName = `Receipt_${today}_${file.name}`;
                 this.downloadFile(file, newFileName);
-                this.showStatus(`❌ Server unavailable - using fallback naming
-📄 File: ${newFileName}
-Try again later for automatic processing.`, 'warning');
             }
             
             return;

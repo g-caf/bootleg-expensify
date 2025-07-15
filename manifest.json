@@ -6,6 +6,9 @@
   "permissions": [
     "storage"
   ],
+  "host_permissions": [
+    "https://bootleg-expensify.onrender.com/*"
+  ],
   "commands": {
     "_execute_action": {
       "suggested_key": {
