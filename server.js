@@ -1,6 +1,5 @@
 const express = require('express');
 const multer = require('multer');
-const pdf = require('pdf-parse');
 const cors = require('cors');
 
 const app = express();
@@ -153,27 +152,12 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     
     console.log('Processing PDF:', req.file.originalname, 'Size:', req.file.size);
     
-    // Add timeout to prevent hanging
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('PDF parsing timeout')), 30000);
-    });
+    // For now, skip PDF parsing and use filename-based detection
+    console.log('PDF received, using filename-based extraction...');
     
-    // Parse PDF with ultra memory-efficient options
-    const parsePromise = pdf(req.file.buffer, {
-      pagerender: false,  // Don't render pages, just extract text
-      normalizeWhitespace: false,  // Disable to save memory
-      disableCombineTextItems: true,
-      max: 1  // Only process first page for extreme memory saving
-    });
-    
-    const data = await Promise.race([parsePromise, timeoutPromise]);
-    const text = data.text;
-    
-    // Clear the buffer from memory immediately
-    req.file.buffer = null;
-    
-    console.log('Extracted text length:', text.length);
-    console.log('Text preview:', text.substring(0, 500));
+    // Extract info from filename if possible
+    const filename = req.file.originalname.toLowerCase();
+    let text = filename;
     
     // Extract vendor, amount, and date
     const vendor = extractVendor(text);
