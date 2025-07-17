@@ -34,6 +34,72 @@ const upload = multer({
   limits: { fileSize: 2 * 1024 * 1024 } // Reduced to 2MB limit
 });
 
+// Analyze text context to determine business category
+function analyzeContext(text) {
+  const contextPatterns = [
+    // Grocery delivery (Instacart, etc.)
+    {
+      category: 'Groceries',
+      patterns: [
+        /shopper picked items/i,
+        /replacements you approved/i,
+        /delivered your order/i,
+        /farmers market/i,
+        /grocery/i,
+        /produce/i,
+        /organic/i
+      ]
+    },
+    
+    // Food delivery (DoorDash, Uber Eats, etc.)
+    {
+      category: 'Food Delivery',
+      patterns: [
+        /driver/i,
+        /restaurant/i,
+        /delivered.*food/i,
+        /pickup.*ready/i,
+        /estimated delivery/i
+      ]
+    },
+    
+    // Coffee shops
+    {
+      category: 'Coffee',
+      patterns: [
+        /barista/i,
+        /latte/i,
+        /cappuccino/i,
+        /espresso/i,
+        /coffee/i,
+        /frappuccino/i
+      ]
+    },
+    
+    // Retail/Shopping
+    {
+      category: 'Retail',
+      patterns: [
+        /order confirmation/i,
+        /shipped/i,
+        /tracking/i,
+        /warehouse/i,
+        /retail/i
+      ]
+    }
+  ];
+  
+  for (const context of contextPatterns) {
+    const matches = context.patterns.filter(pattern => pattern.test(text));
+    if (matches.length >= 2) { // Need at least 2 matching patterns for confidence
+      console.log(`Context analysis: ${context.category} (${matches.length} matches)`);
+      return context.category;
+    }
+  }
+  
+  return null;
+}
+
 // Extract vendor from text
 function extractVendor(text) {
   const vendorPatterns = [
@@ -316,12 +382,25 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     console.log('Vendor found:', !!vendor, 'Amount found:', !!amount);
     console.log('Should trigger fallback:', !vendor || !amount);
     
-    // If PDF text extraction failed to find vendor/amount, try filename parsing
+    // If PDF text extraction failed to find vendor/amount, try fallback methods
     if (!vendor || !amount) {
-      console.log('--- FILENAME PARSING FALLBACK ---');
+      console.log('--- FALLBACK METHODS ---');
+      
+      // Try filename parsing first
+      console.log('Trying filename parsing...');
       console.log('Original filename:', req.file.originalname);
       const filenameInfo = parseFilename(req.file.originalname);
       console.log('Filename parsing result:', filenameInfo);
+      
+      // If still no vendor, try context analysis
+      if (!vendor && !filenameInfo.vendor && text.length > 50) {
+        console.log('Trying context analysis...');
+        const contextVendor = analyzeContext(text);
+        if (contextVendor) {
+          filenameInfo.vendor = contextVendor;
+          console.log('Context analysis result:', contextVendor);
+        }
+      }
       
       const oldVendor = vendor;
       const oldAmount = amount;
