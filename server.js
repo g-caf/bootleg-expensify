@@ -142,6 +142,63 @@ function extractAmount(text) {
   return null;
 }
 
+// Parse filename for vendor, amount, and date info
+function parseFilename(filename) {
+  const result = { vendor: null, amount: null, date: null };
+  
+  // Common filename patterns
+  const patterns = [
+    // "Instacart - $172.51.pdf"
+    /^([A-Za-z\s]+?)\s*-\s*\$(\d+\.\d{2})/i,
+    
+    // "Amazon_2025-07-10_$29.99.pdf"
+    /^([A-Za-z\s]+?)_(\d{4}-\d{2}-\d{2})_\$(\d+\.\d{2})/i,
+    
+    // "Starbucks Receipt $15.67 2025-07-15.pdf"
+    /^([A-Za-z\s]+?).*?\$(\d+\.\d{2}).*?(\d{4}-\d{2}-\d{2})/i,
+    
+    // "Receipt_2025-07-15.pdf" (date only)
+    /Receipt.*?(\d{4}-\d{2}-\d{2})/i,
+    
+    // General vendor patterns
+    /^([A-Za-z\s]+)/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = filename.match(pattern);
+    if (match) {
+      if (match[1] && !result.vendor) {
+        result.vendor = match[1].trim()
+          .replace(/\s*(receipt|order|invoice)\s*/i, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      
+      // Look for amount in different capture groups
+      if (match[2] && match[2].includes('.') && !result.amount) {
+        result.amount = match[2];
+      } else if (match[3] && match[3].includes('.') && !result.amount) {
+        result.amount = match[3];
+      }
+      
+      // Look for date in different capture groups
+      if (match[2] && match[2].includes('-') && !result.date) {
+        result.date = match[2];
+      } else if (match[3] && match[3].includes('-') && !result.date) {
+        result.date = match[3];
+      } else if (match[1] && match[1].includes('-') && !result.date) {
+        result.date = match[1];
+      }
+      
+      if (result.vendor || result.amount || result.date) {
+        break;
+      }
+    }
+  }
+  
+  return result;
+}
+
 // Extract date from text
 function extractDate(text) {
   const datePatterns = [
@@ -205,10 +262,20 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     // Clear buffer to free memory
     req.file.buffer = null;
     
-    // Extract vendor, amount, and date
-    const vendor = extractVendor(text);
-    const amount = extractAmount(text);
-    const receiptDate = extractDate(text);
+    // Extract vendor, amount, and date from PDF text
+    let vendor = extractVendor(text);
+    let amount = extractAmount(text);
+    let receiptDate = extractDate(text);
+    
+    // If PDF text extraction failed (image-based PDF), try filename parsing
+    if ((!vendor || !amount) && text.length < 50) {
+      console.log('PDF text extraction minimal, trying filename parsing...');
+      const filenameInfo = parseFilename(req.file.originalname);
+      vendor = vendor || filenameInfo.vendor;
+      amount = amount || filenameInfo.amount;
+      receiptDate = receiptDate || filenameInfo.date;
+      console.log('Filename parsing result:', filenameInfo);
+    }
     
     console.log('Extracted:', { vendor, amount, receiptDate });
     
