@@ -282,14 +282,24 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     // Parse PDF to extract text
     console.log('Parsing PDF content...');
     const pdfData = await pdf(req.file.buffer, {
-      max: 3, // Try more pages to get complete text
+      max: 1, // Focus on first page but with better extraction
       version: 'v1.10.100',
-      normalizeWhitespace: true
+      normalizeWhitespace: false, // Try without normalization
+      verbosity: 0 // Reduce noise
     });
     
     const text = pdfData.text;
     console.log('Extracted text length:', text.length);
     console.log('First 200 chars:', text.substring(0, 200));
+    
+    // Search for date patterns in the entire text
+    const dateKeywords = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'placed', 'delivered', 'rd', 'th', 'st', 'nd'];
+    const foundKeywords = dateKeywords.filter(keyword => text.toLowerCase().includes(keyword.toLowerCase()));
+    console.log('Date-related keywords found:', foundKeywords);
+    
+    if (foundKeywords.length > 0) {
+      console.log('Full text (searching for dates):', text);
+    }
     
     // Clear buffer to free memory
     req.file.buffer = null;
