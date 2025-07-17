@@ -119,73 +119,221 @@ function analyzeContext(text) {
 
 // Extract vendor from text
 function extractVendor(text) {
-  const vendorPatterns = [
-    // Amazon-specific patterns (highest priority)
-    /Amazon\.com/i,
-    /amazon\.com/i,
-    /Order Details[\s\S]*?amazon/i,
-    
-    // Instacart-specific patterns
-    /instacart/i,
-    /Instacart/i,
-    
-    // Other major platforms
-    /doordash/i,
-    /uber\s*eats/i,
-    /grubhub/i,
-    
-    // Specific companies (case insensitive)
-    /(?:^|\s)(starbucks|walmart|target|costco|home depot|best buy|apple|microsoft|google|uber|lyft|mcdonalds|subway|chipotle|safeway|whole foods)(?:\s|$)/i,
-    
-    // Email-based detection (company from email domain)
-    /@([a-zA-Z0-9\-]+)\.(com|net|org)/i,
-    
-    // Order confirmation patterns
-    /([A-Za-z0-9\s&]+)\s+Order\s+Confirmation/i,
-    
-    // Thank you patterns
-    /Thank you for shopping at\s+([A-Za-z0-9\s&]+)/i,
-    
-    // Generic business patterns (lowest priority)
-    /(?:^|\s)([A-Z][a-zA-Z\s&]+?)\s+(?:Store|Inc|LLC|Corp|Co\.)/i
+  console.log('  Extracting vendor from text...');
+  
+  // Split text into sections to prioritize header/top content
+  const lines = text.split('\n');
+  const topSection = lines.slice(0, Math.min(10, lines.length)).join('\n'); // First 10 lines
+  const fullText = text;
+  
+  console.log('    Top section:', topSection.substring(0, 200));
+  
+  // Platform-specific patterns (highest priority) - look for these first
+  const platformPatterns = [
+    {
+      name: 'Instacart',
+      patterns: [
+        /instacart/i,
+        /your shopper/i,
+        /shopper.*picked/i,
+        /delivery.*instacart/i,
+        /instacart.*delivery/i
+      ],
+      confirmationPatterns: [
+        /shopper/i,
+        /delivery/i,
+        /groceries/i,
+        /replacement/i
+      ]
+    },
+    {
+      name: 'Amazon',
+      patterns: [
+        /amazon\.com/i,
+        /amazon/i,
+        /order.*amazon/i,
+        /amazon.*order/i
+      ],
+      confirmationPatterns: [
+        /order/i,
+        /shipped/i,
+        /prime/i,
+        /fulfillment/i
+      ]
+    },
+    {
+      name: 'DoorDash',
+      patterns: [
+        /doordash/i,
+        /door.*dash/i,
+        /dasher/i
+      ],
+      confirmationPatterns: [
+        /restaurant/i,
+        /delivery/i,
+        /dasher/i
+      ]
+    },
+    {
+      name: 'Uber Eats',
+      patterns: [
+        /uber\s*eats/i,
+        /ubereats/i
+      ],
+      confirmationPatterns: [
+        /delivery/i,
+        /restaurant/i,
+        /driver/i
+      ]
+    },
+    {
+      name: 'Grubhub',
+      patterns: [
+        /grubhub/i,
+        /grub.*hub/i
+      ],
+      confirmationPatterns: [
+        /delivery/i,
+        /restaurant/i,
+        /driver/i
+      ]
+    }
   ];
   
-  // Filter out delivery status text and other noise
-  const blacklistPatterns = [
-    /arriving/i,
-    /package/i,
-    /delivered/i,
-    /shipping/i,
-    /out for/i,
-    /expected/i,
-    /tracking/i,
-    /order placed/i,
-    /ship to/i,
-    /payment method/i
+  // Check platform-specific patterns first
+  for (const platform of platformPatterns) {
+    console.log(`    Checking for ${platform.name}...`);
+    
+    // Check if any platform pattern matches
+    const hasMainPattern = platform.patterns.some(pattern => pattern.test(fullText));
+    
+    if (hasMainPattern) {
+      console.log(`      Found ${platform.name} main pattern`);
+      
+      // Confirm with secondary patterns
+      const confirmationMatches = platform.confirmationPatterns.filter(pattern => pattern.test(fullText));
+      console.log(`      Confirmation patterns matched: ${confirmationMatches.length}/${platform.confirmationPatterns.length}`);
+      
+      if (confirmationMatches.length >= 1) {
+        console.log(`      Confirmed ${platform.name}!`);
+        return platform.name;
+      }
+    }
+  }
+  
+  // Store-specific patterns (medium priority) - look in top section first
+  const storePatterns = [
+    // Coffee shops
+    { name: 'Starbucks', patterns: [/starbucks/i, /sbux/i] },
+    { name: 'Dunkin', patterns: [/dunkin/i, /dunkin.*donuts/i] },
+    
+    // Grocery stores
+    { name: 'Walmart', patterns: [/walmart/i, /wal.*mart/i] },
+    { name: 'Target', patterns: [/target/i] },
+    { name: 'Costco', patterns: [/costco/i] },
+    { name: 'Safeway', patterns: [/safeway/i] },
+    { name: 'Whole Foods', patterns: [/whole\s*foods/i, /wholefoods/i] },
+    
+    // Fast food
+    { name: 'McDonalds', patterns: [/mcdonald/i, /mcdonalds/i] },
+    { name: 'Subway', patterns: [/subway/i] },
+    { name: 'Chipotle', patterns: [/chipotle/i] },
+    
+    // Retail
+    { name: 'Home Depot', patterns: [/home\s*depot/i, /homedepot/i] },
+    { name: 'Best Buy', patterns: [/best\s*buy/i, /bestbuy/i] },
+    
+    // Tech companies (be careful with these)
+    { name: 'Apple Store', patterns: [/apple\s*store/i, /apple.*retail/i] },
+    { name: 'Microsoft Store', patterns: [/microsoft\s*store/i] }
   ];
   
-  for (const pattern of vendorPatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      let vendor = match[1] || match[0];
-      vendor = vendor.trim();
+  // Check store patterns in top section first, then full text
+  for (const searchText of [topSection, fullText]) {
+    for (const store of storePatterns) {
+      for (const pattern of store.patterns) {
+        if (pattern.test(searchText)) {
+          console.log(`      Found store: ${store.name} in ${searchText === topSection ? 'top section' : 'full text'}`);
+          return store.name;
+        }
+      }
+    }
+  }
+  
+  // Email-based detection patterns
+  const emailPattern = /@([a-zA-Z0-9\-]+)\.(com|net|org)/i;
+  const emailMatch = topSection.match(emailPattern);
+  if (emailMatch) {
+    const domain = emailMatch[1];
+    // Convert domain to readable name
+    const domainToName = {
+      'amazon': 'Amazon',
+      'instacart': 'Instacart',
+      'doordash': 'DoorDash',
+      'uber': 'Uber Eats',
+      'grubhub': 'Grubhub',
+      'starbucks': 'Starbucks',
+      'target': 'Target',
+      'walmart': 'Walmart'
+    };
+    
+    if (domainToName[domain.toLowerCase()]) {
+      console.log(`      Found vendor from email domain: ${domainToName[domain.toLowerCase()]}`);
+      return domainToName[domain.toLowerCase()];
+    }
+  }
+  
+  // Generic business patterns (lowest priority) - only in top section
+  const businessPatterns = [
+    /([A-Z][a-zA-Z\s&]+?)\s+(?:Store|Inc|LLC|Corp|Co\.|Restaurant|Cafe)/i,
+    /([A-Z][a-zA-Z\s&]+?)\s+Order\s+Confirmation/i,
+    /Thank you for shopping at\s+([A-Za-z0-9\s&]+)/i
+  ];
+  
+  for (const pattern of businessPatterns) {
+    const match = topSection.match(pattern);
+    if (match && match[1]) {
+      let vendor = match[1].trim();
       
       // Clean up common suffixes and prefixes
-      vendor = vendor.replace(/\s+(Inc|LLC|Corp|Co\.|Store|Order|Confirmation)$/i, '');
+      vendor = vendor.replace(/\s+(Inc|LLC|Corp|Co\.|Store|Order|Confirmation|Restaurant|Cafe)$/i, '');
       vendor = vendor.replace(/^(Order|Details|www\.|https?:\/\/)/i, '');
       
-      // Check if this matches any blacklisted terms
-      const isBlacklisted = blacklistPatterns.some(blackPattern => 
-        blackPattern.test(vendor)
-      );
+      // Filter out common product names and noise
+      const productBlacklist = [
+        /apple/i, // Common product, not the company
+        /banana/i,
+        /orange/i,
+        /chicken/i,
+        /beef/i,
+        /pork/i,
+        /fish/i,
+        /bread/i,
+        /milk/i,
+        /cheese/i,
+        /arriving/i,
+        /package/i,
+        /delivered/i,
+        /shipping/i,
+        /tracking/i,
+        /payment/i,
+        /total/i,
+        /subtotal/i,
+        /tax/i,
+        /fee/i,
+        /tip/i
+      ];
       
-      if (!isBlacklisted && vendor.length > 1) {
-        // Capitalize properly
+      const isProduct = productBlacklist.some(blackPattern => blackPattern.test(vendor));
+      
+      if (!isProduct && vendor.length > 1 && vendor.length < 30) {
+        console.log(`      Found business vendor: ${vendor}`);
         return vendor.charAt(0).toUpperCase() + vendor.slice(1).toLowerCase();
       }
     }
   }
   
+  console.log('      No vendor found');
   return null;
 }
 
