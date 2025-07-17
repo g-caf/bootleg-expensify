@@ -3,9 +3,7 @@ const multer = require('multer');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Memory limit is handled by package.json start script
+const PORT = process.env.PORT || 10000;
 
 // CORS configuration for Chrome extensions
 app.use(cors({
@@ -181,10 +179,8 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
       outputFilename = `Receipt_${dateStr}.pdf`;
     }
     
-    // Force garbage collection if available
-    if (global.gc) {
-      global.gc();
-    }
+    // Memory cleanup
+    req.file = null;
     
     res.json({ 
       vendor, 
@@ -198,10 +194,8 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
   } catch (error) {
     console.error('Error processing PDF:', error);
     
-    // Force garbage collection on error
-    if (global.gc) {
-      global.gc();
-    }
+    // Memory cleanup on error
+    req.file = null;
     
     res.status(500).json({ error: error.message });
   }
@@ -212,6 +206,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Receipt parser server running on port ${PORT}`);
 });

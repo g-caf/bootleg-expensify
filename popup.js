@@ -83,6 +83,20 @@ class ExpenseGadget {
         console.log('File size:', file.size);
         console.log('File type:', file.type);
         
+        // STEP 1: Test basic connectivity first
+        console.log('🧪 TESTING BASIC CONNECTIVITY...');
+        try {
+            const healthResponse = await fetch('https://bootleg-expensify.onrender.com/health');
+            console.log('✅ Health check response status:', healthResponse.status);
+            const healthData = await healthResponse.json();
+            console.log('✅ Health check data:', healthData);
+            this.showStatus('✅ Server connectivity test passed!', 'success');
+        } catch (healthError) {
+            console.error('❌ Health check failed:', healthError);
+            this.showStatus(`❌ Server connectivity test failed: ${healthError.message}`, 'error');
+            return; // Stop processing if we can't even reach the server
+        }
+        
         try {
             console.log('About to show status message...');
             this.showStatus('🔄 Processing receipt...', 'success');
@@ -108,9 +122,14 @@ class ExpenseGadget {
                 });
                 clearTimeout(timeoutId);
                 console.log('Fetch request completed, response status:', response.status);
+                console.log('Response ok:', response.ok);
+                console.log('Response status text:', response.statusText);
                 
                 if (!response.ok) {
-                    throw new Error(`Server error: ${response.status}`);
+                    // Try to get the error details from the response
+                    const errorText = await response.text();
+                    console.log('Error response body:', errorText);
+                    throw new Error(`Server error: ${response.status} ${response.statusText} - ${errorText}`);
                 }
                 
                 console.log('About to parse JSON response...');
