@@ -493,6 +493,9 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
       console.log('Full text (searching for dates):', text);
     }
     
+    // Store original buffer for Google Drive upload
+    const originalBuffer = req.file.buffer;
+    
     // Clear buffer to free memory
     req.file.buffer = null;
     
@@ -568,7 +571,7 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     if (req.session.googleTokens) {
       console.log('Uploading to Google Drive...');
       try {
-        driveUpload = await uploadToGoogleDrive(req.file.buffer, outputFilename, req.session.googleTokens);
+        driveUpload = await uploadToGoogleDrive(originalBuffer, outputFilename, req.session.googleTokens);
         console.log('Google Drive upload result:', driveUpload);
       } catch (driveError) {
         console.error('Google Drive upload failed:', driveError);
