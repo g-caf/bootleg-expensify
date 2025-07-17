@@ -10,8 +10,8 @@ const PORT = process.env.PORT || 10000;
 
 // Google OAuth configuration
 const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID || '527047051561-u5ui6k9al9rni8b5nq5rv7f2lm8nn4t7.apps.googleusercontent.com',
-  process.env.GOOGLE_CLIENT_SECRET || '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',
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
   process.env.GOOGLE_REDIRECT_URI || 'https://bootleg-expensify.onrender.com/auth/google/callback'
 );
 
