@@ -149,7 +149,10 @@ function parseFilename(filename) {
   
   // Common filename patterns
   const patterns = [
-    // "Instacart - $172.51.pdf"
+    // "Instacart $304.66.pdf" (vendor space amount)
+    /^([A-Za-z\s]+?)\s+\$(\d+\.\d{2})/i,
+    
+    // "Instacart - $172.51.pdf" (vendor dash amount)
     /^([A-Za-z\s]+?)\s*-\s*\$(\d+\.\d{2})/i,
     
     // "Amazon_2025-07-10_$29.99.pdf"
@@ -161,7 +164,7 @@ function parseFilename(filename) {
     // "Receipt_2025-07-15.pdf" (date only)
     /Receipt.*?(\d{4}-\d{2}-\d{2})/i,
     
-    // General vendor patterns
+    // General vendor patterns (no amount)
     /^([A-Za-z\s]+)/i
   ];
   
