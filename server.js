@@ -174,37 +174,75 @@ function extractVendor(text) {
 
 // Extract amount from text
 function extractAmount(text) {
-  const amountPatterns = [
-    // Most specific patterns first
-    /Total[:\s]*\$(\d+\.\d{2})/i,
-    /Grand Total[:\s]*\$(\d+\.\d{2})/i,
-    /total[:\s]*\$(\d+\.\d{2})/i,
-    /grand total[:\s]*\$(\d+\.\d{2})/i,
+  console.log('  Extracting amount from text...');
+  
+  // High-priority patterns (most likely to be the actual total)
+  const highPriorityPatterns = [
+    // Various total formats
+    /(?:Grand\s+)?Total[:\s]*\$(\d+\.\d{2})/i,
+    /(?:Order\s+)?Total[:\s]*\$(\d+\.\d{2})/i,
+    /(?:Final\s+)?Total[:\s]*\$(\d+\.\d{2})/i,
+    /(?:Sub)?total[:\s]*\$(\d+\.\d{2})/i,
     
-    // Payment patterns
-    /Payment[:\s]*\$(\d+\.\d{2})/i,
-    /Amount[:\s]*\$(\d+\.\d{2})/i,
+    // Payment and charge patterns
+    /(?:Amount\s+)?Charged[:\s]*\$(\d+\.\d{2})/i,
+    /(?:Total\s+)?Amount[:\s]*\$(\d+\.\d{2})/i,
+    /(?:Final\s+)?Payment[:\s]*\$(\d+\.\d{2})/i,
     
-    // Generic dollar patterns (less specific) - removed global flag
+    // Receipt-specific patterns
+    /You\s+(?:paid|owe)[:\s]*\$(\d+\.\d{2})/i,
+    /(?:Card\s+)?Charged[:\s]*\$(\d+\.\d{2})/i,
+    /(?:Total\s+)?Due[:\s]*\$(\d+\.\d{2})/i
+  ];
+  
+  // Medium-priority patterns
+  const mediumPriorityPatterns = [
+    // Context-aware patterns (look for $ near total indicators)
+    /total.*?\$(\d+\.\d{2})/i,
+    /\$(\d+\.\d{2}).*?total/i,
+    /paid.*?\$(\d+\.\d{2})/i,
+    /\$(\d+\.\d{2}).*?paid/i
+  ];
+  
+  // Low-priority patterns (last resort)
+  const lowPriorityPatterns = [
     /\$(\d+\.\d{2})/i
   ];
   
-  const amounts = [];
-  for (const pattern of amountPatterns) {
-    const match = pattern.exec(text);
-    if (match) {
-      const amount = parseFloat(match[1]);
-      if (amount > 0) {
-        amounts.push(amount);
+  const patternGroups = [
+    { name: 'high-priority', patterns: highPriorityPatterns },
+    { name: 'medium-priority', patterns: mediumPriorityPatterns },
+    { name: 'low-priority', patterns: lowPriorityPatterns }
+  ];
+  
+  // Try each group in order, return first successful match
+  for (const group of patternGroups) {
+    console.log(`    Trying ${group.name} patterns...`);
+    const amounts = [];
+    
+    for (let i = 0; i < group.patterns.length; i++) {
+      const pattern = group.patterns[i];
+      const match = pattern.exec(text);
+      console.log(`      Pattern ${i + 1}: ${pattern} -> ${match ? '$' + match[1] : 'no match'}`);
+      
+      if (match) {
+        const amount = parseFloat(match[1]);
+        if (amount > 0) {
+          amounts.push(amount);
+        }
       }
+    }
+    
+    if (amounts.length > 0) {
+      // For high-priority patterns, use the first match (most specific)
+      // For others, use the largest amount
+      const finalAmount = group.name === 'high-priority' ? amounts[0] : Math.max(...amounts);
+      console.log(`    Found ${group.name} amount: $${finalAmount.toFixed(2)}`);
+      return finalAmount.toFixed(2);
     }
   }
   
-  // Use the largest amount found (likely the total)
-  if (amounts.length > 0) {
-    return Math.max(...amounts).toFixed(2);
-  }
-  
+  console.log('    No amount found');
   return null;
 }
 
