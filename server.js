@@ -37,11 +37,25 @@ const upload = multer({
 // Extract vendor from text
 function extractVendor(text) {
   const vendorPatterns = [
-    // Specific companies
-    /(?:^|\s)(amazon|doordash|2modern|dynamo donut|starbucks|walmart|target|costco|home depot|best buy|apple|microsoft|google|uber|lyft|grubhub|mcdonalds|subway|chipotle)(?:\s|$)/i,
+    // Amazon-specific patterns (highest priority)
+    /Amazon\.com/i,
+    /amazon\.com/i,
+    /Order Details[\s\S]*?amazon/i,
     
-    // Email-based detection
-    /(?:^|\s)([A-Za-z0-9\s&]+)\s+<[^>]+@([^>]+)>/i,
+    // Instacart-specific patterns
+    /instacart/i,
+    /Instacart/i,
+    
+    // Other major platforms
+    /doordash/i,
+    /uber\s*eats/i,
+    /grubhub/i,
+    
+    // Specific companies (case insensitive)
+    /(?:^|\s)(starbucks|walmart|target|costco|home depot|best buy|apple|microsoft|google|uber|lyft|mcdonalds|subway|chipotle|safeway|whole foods)(?:\s|$)/i,
+    
+    // Email-based detection (company from email domain)
+    /@([a-zA-Z0-9\-]+)\.(com|net|org)/i,
     
     // Order confirmation patterns
     /([A-Za-z0-9\s&]+)\s+Order\s+Confirmation/i,
@@ -49,17 +63,43 @@ function extractVendor(text) {
     // Thank you patterns
     /Thank you for shopping at\s+([A-Za-z0-9\s&]+)/i,
     
-    // Generic business patterns
-    /(?:^|\s)([A-Z][a-zA-Z\s&]+?)\s+(?:Furniture|Lighting|Food|Delivery|Coffee|Restaurant|Store|Inc|LLC|Corp|Co\.)/i
+    // Generic business patterns (lowest priority)
+    /(?:^|\s)([A-Z][a-zA-Z\s&]+?)\s+(?:Store|Inc|LLC|Corp|Co\.)/i
+  ];
+  
+  // Filter out delivery status text and other noise
+  const blacklistPatterns = [
+    /arriving/i,
+    /package/i,
+    /delivered/i,
+    /shipping/i,
+    /out for/i,
+    /expected/i,
+    /tracking/i,
+    /order placed/i,
+    /ship to/i,
+    /payment method/i
   ];
   
   for (const pattern of vendorPatterns) {
     const match = text.match(pattern);
     if (match) {
-      let vendor = match[1].trim();
-      // Clean up common suffixes
-      vendor = vendor.replace(/\s+(Inc|LLC|Corp|Co\.|Furniture|Lighting|Food|Delivery)$/i, '');
-      return vendor;
+      let vendor = match[1] || match[0];
+      vendor = vendor.trim();
+      
+      // Clean up common suffixes and prefixes
+      vendor = vendor.replace(/\s+(Inc|LLC|Corp|Co\.|Store|Order|Confirmation)$/i, '');
+      vendor = vendor.replace(/^(Order|Details|www\.|https?:\/\/)/i, '');
+      
+      // Check if this matches any blacklisted terms
+      const isBlacklisted = blacklistPatterns.some(blackPattern => 
+        blackPattern.test(vendor)
+      );
+      
+      if (!isBlacklisted && vendor.length > 1) {
+        // Capitalize properly
+        return vendor.charAt(0).toUpperCase() + vendor.slice(1).toLowerCase();
+      }
     }
   }
   
@@ -176,11 +216,11 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     let outputFilename = '';
     if (vendor && amount) {
       const dateStr = receiptDate || new Date().toISOString().split('T')[0];
-      outputFilename = `${vendor}_${dateStr}_$${amount}.pdf`;
+      outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
     } else {
       // Fallback naming
       const dateStr = receiptDate || new Date().toISOString().split('T')[0];
-      outputFilename = `Receipt_${dateStr}.pdf`;
+      outputFilename = `Receipt ${dateStr}.pdf`;
     }
     
     // Memory cleanup
