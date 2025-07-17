@@ -176,13 +176,58 @@ function extractVendor(text) {
 function extractAmount(text) {
   console.log('  Extracting amount from text...');
   
+  // First, look for subtotal as an indicator
+  const subtotalMatch = text.match(/(?:Sub\s*)?total[:\s]*\$(\d+\.\d{2})/i);
+  if (subtotalMatch) {
+    console.log('    Found subtotal:', subtotalMatch[1]);
+    console.log('    Looking for final total after subtotal...');
+    
+    // Extract text after the subtotal to focus search
+    const subtotalIndex = text.indexOf(subtotalMatch[0]);
+    const textAfterSubtotal = text.substring(subtotalIndex);
+    console.log('    Text after subtotal (first 200 chars):', textAfterSubtotal.substring(0, 200));
+    
+    // Look for final total patterns in the text after subtotal
+    const finalTotalPatterns = [
+      /(?:Grand\s+|Final\s+|Order\s+)?Total[:\s]*\$(\d+\.\d{2})/i,
+      /(?:Amount\s+)?Charged[:\s]*\$(\d+\.\d{2})/i,
+      /You\s+(?:paid|owe)[:\s]*\$(\d+\.\d{2})/i,
+      /(?:Card\s+)?Charged[:\s]*\$(\d+\.\d{2})/i,
+      /(?:Total\s+)?Due[:\s]*\$(\d+\.\d{2})/i
+    ];
+    
+    for (let i = 0; i < finalTotalPatterns.length; i++) {
+      const pattern = finalTotalPatterns[i];
+      const match = pattern.exec(textAfterSubtotal);
+      console.log(`      Final total pattern ${i + 1}: ${pattern} -> ${match ? '$' + match[1] : 'no match'}`);
+      
+      if (match) {
+        const amount = parseFloat(match[1]);
+        const subtotalAmount = parseFloat(subtotalMatch[1]);
+        
+        // Final total should be >= subtotal (with taxes, fees, etc.)
+        if (amount >= subtotalAmount) {
+          console.log(`    Found final total: $${amount.toFixed(2)} (subtotal was $${subtotalAmount.toFixed(2)})`);
+          return amount.toFixed(2);
+        } else {
+          console.log(`    Skipping amount $${amount.toFixed(2)} (less than subtotal $${subtotalAmount.toFixed(2)})`);
+        }
+      }
+    }
+    
+    console.log('    No final total found after subtotal, using subtotal as fallback');
+    return subtotalMatch[1];
+  }
+  
+  // If no subtotal found, use the original priority-based approach
+  console.log('    No subtotal found, using standard extraction...');
+  
   // High-priority patterns (most likely to be the actual total)
   const highPriorityPatterns = [
-    // Various total formats
+    // Various total formats (excluding subtotal)
     /(?:Grand\s+)?Total[:\s]*\$(\d+\.\d{2})/i,
     /(?:Order\s+)?Total[:\s]*\$(\d+\.\d{2})/i,
     /(?:Final\s+)?Total[:\s]*\$(\d+\.\d{2})/i,
-    /(?:Sub)?total[:\s]*\$(\d+\.\d{2})/i,
     
     // Payment and charge patterns
     /(?:Amount\s+)?Charged[:\s]*\$(\d+\.\d{2})/i,
