@@ -380,6 +380,8 @@ function parseFilename(filename) {
 
 // Extract date from text
 function extractDate(text) {
+  console.log('  Extracting date from text...');
+  
   const datePatterns = [
     // "June 23rd, 2025" format (with ordinal)
     /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th),\s+\d{4})/gi,
@@ -396,34 +398,50 @@ function extractDate(text) {
     /(\d{1,2}-\d{1,2}-\d{4})/g,
     // YYYY-MM-DD format
     /(\d{4}-\d{1,2}-\d{1,2})/g,
-    // Month DD, YYYY format
+    // Month DD, YYYY format (without ordinal)
     /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4})/gi,
     // Mon DD, YYYY format
-    /((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4})/gi,
-    // DD/MM/YYYY format (less common in US)
-    /(\d{1,2}\/\d{1,2}\/\d{4})/g
+    /((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4})/gi
   ];
   
   const dates = [];
-  for (const pattern of datePatterns) {
+  for (let i = 0; i < datePatterns.length; i++) {
+    const pattern = datePatterns[i];
+    console.log(`    Testing pattern ${i + 1}: ${pattern}`);
+    
     let match;
     while ((match = pattern.exec(text)) !== null) {
       const dateStr = match[1];
-      const date = new Date(dateStr);
+      console.log(`      Found date string: "${dateStr}"`);
+      
+      // Remove ordinal suffixes before parsing
+      const cleanDateStr = dateStr.replace(/(\d{1,2})(st|nd|rd|th)/g, '$1');
+      console.log(`      Cleaned date string: "${cleanDateStr}"`);
+      
+      const date = new Date(cleanDateStr);
+      console.log(`      Parsed date: ${date}`);
       
       // Check if date is valid and not in the future
       if (!isNaN(date.getTime()) && date <= new Date()) {
+        console.log(`      Valid date found: ${date.toISOString().split('T')[0]}`);
         dates.push(date);
+      } else {
+        console.log(`      Invalid or future date, skipping`);
       }
     }
   }
   
+  console.log(`  Total valid dates found: ${dates.length}`);
+  
   // Return the most recent valid date found
   if (dates.length > 0) {
     const mostRecentDate = new Date(Math.max(...dates.map(d => d.getTime())));
-    return mostRecentDate.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+    const formattedDate = mostRecentDate.toISOString().split('T')[0];
+    console.log(`  Returning most recent date: ${formattedDate}`);
+    return formattedDate;
   }
   
+  console.log('  No valid dates found');
   return null;
 }
 
