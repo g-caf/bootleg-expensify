@@ -249,8 +249,14 @@ function parseFilename(filename) {
           .replace(/\s*(receipt|order|invoice)\s*/i, '')
           .replace(/\s+/g, ' ')
           .trim();
-        result.vendor = rawVendor;
-        console.log('      Set vendor:', rawVendor);
+        
+        // Don't set vendor if it looks like a date (YYYY-MM-DD format)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(rawVendor)) {
+          result.vendor = rawVendor;
+          console.log('      Set vendor:', rawVendor);
+        } else {
+          console.log('      Skipping vendor (looks like date):', rawVendor);
+        }
       }
       
       // Look for amount in different capture groups
@@ -392,14 +398,19 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
       const filenameInfo = parseFilename(req.file.originalname);
       console.log('Filename parsing result:', filenameInfo);
       
-      // If still no vendor, try context analysis
-      if (!vendor && !filenameInfo.vendor && text.length > 50) {
+      // If still no vendor (or bad vendor), try context analysis
+      const hasValidVendor = vendor && vendor.length > 0;
+      const hasValidFilenameVendor = filenameInfo.vendor && filenameInfo.vendor.length > 0;
+      
+      if (!hasValidVendor && !hasValidFilenameVendor && text.length > 50) {
         console.log('Trying context analysis...');
         const contextVendor = analyzeContext(text);
         if (contextVendor) {
           filenameInfo.vendor = contextVendor;
           console.log('Context analysis result:', contextVendor);
         }
+      } else {
+        console.log('Skipping context analysis - valid vendor found');
       }
       
       const oldVendor = vendor;
