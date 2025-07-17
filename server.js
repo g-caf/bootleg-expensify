@@ -189,8 +189,10 @@ function extractAmount(text) {
     
     // Look for final total patterns in the text after subtotal
     const finalTotalPatterns = [
-      /(?:Grand\s+|Final\s+|Order\s+)?Total[:\s]*\$(\d+\.\d{2})/i,
+      /(?:Grand\s+|Final\s+|Order\s+)Total[:\s]*\$(\d+\.\d{2})/i, // Requires prefix to avoid "Subtotal"
+      /\bTotal\$(\d+\.\d{2})/i, // Word boundary to avoid "Subtotal"
       /(?:Amount\s+)?Charged[:\s]*\$(\d+\.\d{2})/i,
+      /(?:Total\s+)?charged[:\s]*\$(\d+\.\d{2})/i,
       /You\s+(?:paid|owe)[:\s]*\$(\d+\.\d{2})/i,
       /(?:Card\s+)?Charged[:\s]*\$(\d+\.\d{2})/i,
       /(?:Total\s+)?Due[:\s]*\$(\d+\.\d{2})/i
