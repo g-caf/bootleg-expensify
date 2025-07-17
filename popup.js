@@ -1,24 +1,26 @@
-// Extension setup (PDF.js disabled)
+// Extension setup for sequential PDF processing
 console.log('=== POPUP.JS SCRIPT LOADING ===');
 console.log('Chrome runtime available:', !!chrome.runtime);
-console.log('Extension mode: Simple file renaming (no PDF parsing)');
+console.log('Extension mode: Sequential PDF processing with progress bar');
 
 class ExpenseGadget {
     constructor() {
         console.log('=== EXPENSEGADGET CONSTRUCTOR ===');
-        this.receipts = [];
+        this.currentQueue = [];
+        this.isProcessing = false;
         this.init();
     }
 
     async init() {
         this.setupEventListeners();
-        await this.loadStoredReceipts();
+        await this.checkGoogleDriveStatus();
     }
 
     setupEventListeners() {
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const closeBtn = document.getElementById('closeBtn');
+        const driveConnectBtn = document.getElementById('driveConnectBtn');
 
         // Close button
         closeBtn.addEventListener('click', () => {
@@ -34,6 +36,11 @@ class ExpenseGadget {
         // File input change
         fileInput.addEventListener('change', (e) => {
             this.processFiles(e.target.files);
+        });
+
+        // Google Drive connect button
+        driveConnectBtn.addEventListener('click', () => {
+            this.connectGoogleDrive();
         });
     }
 
@@ -64,310 +71,171 @@ class ExpenseGadget {
         console.log('=== PROCESS FILES CALLED ===');
         console.log('Processing', files.length, 'files');
         
-        for (const file of files) {
-            console.log('Processing file:', file.name, 'type:', file.type);
-            if (file.type === 'application/pdf') {
-                console.log('File is PDF, calling processReceipt...');
-                await this.processReceipt(file);
-            } else {
-                console.log('File is not PDF, showing error');
-                this.showStatus('Only PDF files are supported', 'error');
+        // Filter for PDF files only
+        const pdfFiles = Array.from(files).filter(file => file.type === 'application/pdf');
+        
+        if (pdfFiles.length === 0) {
+            this.showStatus('❌ No PDF files found. Please select PDF files only.', 'error');
+            return;
+        }
+
+        if (pdfFiles.length !== files.length) {
+            this.showStatus(`⚠️ Only processing ${pdfFiles.length} PDF files (${files.length - pdfFiles.length} non-PDF files ignored)`, 'warning');
+        }
+
+        // Don't start new processing if already in progress
+        if (this.isProcessing) {
+            this.showStatus('⚠️ Already processing files. Please wait for current batch to complete.', 'warning');
+            return;
+        }
+
+        this.currentQueue = pdfFiles;
+        await this.processQueue();
+    }
+
+    async processQueue() {
+        if (this.currentQueue.length === 0) return;
+
+        this.isProcessing = true;
+        const totalFiles = this.currentQueue.length;
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Show progress section
+        this.showProgressSection(true);
+        this.hideStatus();
+
+        for (let i = 0; i < totalFiles; i++) {
+            const file = this.currentQueue[i];
+            const currentIndex = i + 1;
+
+            // Update progress
+            this.updateProgress(currentIndex, totalFiles, file.name);
+
+            try {
+                console.log(`Processing file ${currentIndex}/${totalFiles}: ${file.name}`);
+                const success = await this.processReceipt(file);
+                if (success) {
+                    successCount++;
+                } else {
+                    errorCount++;
+                }
+            } catch (error) {
+                console.error(`Error processing file ${file.name}:`, error);
+                errorCount++;
+            }
+
+            // Small delay between files to prevent overwhelming the server
+            if (i < totalFiles - 1) {
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
         }
+
+        // Hide progress section and show final results
+        this.showProgressSection(false);
+        this.showFinalResults(successCount, errorCount, totalFiles);
+
+        // Reset state
+        this.currentQueue = [];
+        this.isProcessing = false;
+    }
+
+    updateProgress(current, total, fileName) {
+        const progressText = document.getElementById('progressText');
+        const progressBar = document.getElementById('progressBar');
+        const progressCount = document.getElementById('progressCount');
+
+        const percentage = ((current - 1) / total) * 100;
+        
+        progressText.textContent = `Processing: ${fileName}`;
+        progressBar.style.width = `${percentage}%`;
+        progressCount.textContent = `${current - 1} of ${total} completed`;
+    }
+
+    showProgressSection(show) {
+        const progressSection = document.getElementById('progressSection');
+        progressSection.style.display = show ? 'block' : 'none';
+    }
+
+    hideStatus() {
+        const status = document.getElementById('status');
+        status.style.display = 'none';
+    }
+
+    showFinalResults(successCount, errorCount, totalFiles) {
+        let message;
+        let type;
+
+        if (errorCount === 0) {
+            message = `✅ All ${totalFiles} receipts processed successfully!`;
+            type = 'success';
+        } else if (successCount === 0) {
+            message = `❌ All ${totalFiles} receipts failed to process. Check server connection.`;
+            type = 'error';
+        } else {
+            message = `⚠️ Processed ${successCount} receipts successfully, ${errorCount} failed.`;
+            type = 'warning';
+        }
+
+        this.showStatus(message, type);
     }
 
     async processReceipt(file) {
         console.log('=== START processReceipt ===');
-        console.log('🔥 NEW ERROR HANDLING CODE IS ACTIVE 🔥');
         console.log('File name:', file.name);
         console.log('File size:', file.size);
-        console.log('File type:', file.type);
-        
-        // STEP 1: Test basic connectivity first
-        console.log('🧪 TESTING BASIC CONNECTIVITY...');
-        try {
-            const healthResponse = await fetch('https://bootleg-expensify.onrender.com/health');
-            console.log('✅ Health check response status:', healthResponse.status);
-            const healthData = await healthResponse.json();
-            console.log('✅ Health check data:', healthData);
-            this.showStatus('✅ Server connectivity test passed!', 'success');
-        } catch (healthError) {
-            console.error('❌ Health check failed:', healthError);
-            this.showStatus(`❌ Server connectivity test failed: ${healthError.message}`, 'error');
-            return; // Stop processing if we can't even reach the server
-        }
         
         try {
-            console.log('About to show status message...');
-            this.showStatus('🔄 Processing receipt...', 'success');
-            console.log('Status message shown successfully');
-            
-            // Send PDF to server for processing
-            console.log('Sending PDF to server for processing...');
-            
-            console.log('Creating FormData...');
+            // Create FormData
             const formData = new FormData();
             formData.append('pdf', file);
-            console.log('FormData created, file appended');
             
-            try {
-                console.log('About to make fetch request...');
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
-                
-                const response = await fetch('https://bootleg-expensify.onrender.com/parse-receipt', {
-                    method: 'POST',
-                    body: formData,
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-                console.log('Fetch request completed, response status:', response.status);
-                console.log('Response ok:', response.ok);
-                console.log('Response status text:', response.statusText);
-                
-                if (!response.ok) {
-                    // Try to get the error details from the response
-                    const errorText = await response.text();
-                    console.log('Error response body:', errorText);
-                    throw new Error(`Server error: ${response.status} ${response.statusText} - ${errorText}`);
-                }
-                
-                console.log('About to parse JSON response...');
-                const result = await response.json();
-                console.log('Server response:', result);
-                
-                // Use the filename from the server
-                const newFileName = result.filename || `Receipt_${new Date().toISOString().split('T')[0]}.pdf`;
-                this.downloadFile(file, newFileName);
-                
-                // Show detailed confirmation
-                if (result.success) {
-                    this.showStatus(`✅ Receipt processed successfully!
-📄 File: ${newFileName}
-🏪 Vendor: ${result.vendor || 'Not detected'}
-💰 Amount: $${result.amount || 'Not detected'}
-📅 Date: ${result.receiptDate || 'Not detected'}`, 'success');
-                } else {
-                    this.showStatus(`⚠️ Partial processing completed
-📄 File: ${newFileName}
-Some details couldn't be extracted automatically.`, 'warning');
-                }
-                
-            } catch (error) {
-                console.error('Server processing failed:', error);
-                console.error('Error type:', error.constructor.name);
-                console.error('Error stack:', error.stack);
-                
-                let errorMessage = '';
-                if (error.name === 'AbortError') {
-                    errorMessage = '❌ Request timed out (60s limit exceeded)';
-                } else if (error.message.includes('CORS')) {
-                    errorMessage = '❌ CORS error - permission issue';
-                } else if (error.message.includes('Failed to fetch')) {
-                    errorMessage = '❌ Network error - cannot reach server';
-                } else {
-                    errorMessage = `❌ Server error: ${error.message}`;
-                }
-                
-                this.showStatus(`${errorMessage}
-Details: ${error.toString()}
-Check console for more info.`, 'error');
-                
+            // Make request with timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per file
+            
+            const response = await fetch('https://bootleg-expensify.onrender.com/parse-receipt', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                console.error(`Server error for ${file.name}: ${response.status} ${response.statusText}`);
                 // Fallback to simple renaming
-                const today = new Date().toISOString().split('T')[0];
-                const newFileName = `Receipt_${today}_${file.name}`;
-                this.downloadFile(file, newFileName);
+                this.downloadFileWithFallbackName(file);
+                return false;
             }
             
-            return;
-            console.log('PDF parsed successfully, pages:', pdf.numPages);
+            const result = await response.json();
+            console.log(`Server response for ${file.name}:`, result);
             
-            let fullText = '';
+            // Use the filename from the server or create a fallback
+            const newFileName = result.filename || this.createFallbackFileName(file.name);
+            this.downloadFile(file, newFileName);
             
-            // Extract text from all pages
-            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                try {
-                    const page = await pdf.getPage(pageNum);
-                    const textContent = await page.getTextContent();
-                    
-                    if (textContent && textContent.items && Array.isArray(textContent.items)) {
-                        const pageText = textContent.items
-                            .filter(item => item && item.str)
-                            .map(item => item.str)
-                            .join(' ');
-                        fullText += pageText + ' ';
-                    }
-                } catch (pageError) {
-                    console.warn(`Error processing page ${pageNum}:`, pageError);
-                }
-            }
-            
-            // Extract vendor and amount
-            console.log('Extracted text length:', fullText.length);
-            console.log('Extracted text preview:', fullText.substring(0, Math.min(500, fullText.length)));
-            const metadata = this.extractMetadata(fullText);
-            console.log('Extracted metadata:', metadata);
-            
-            if (metadata.vendor && metadata.amount) {
-                const newFileName = `${metadata.vendor} - $${metadata.amount}.pdf`;
-                
-                // Store receipt
-                const receipt = {
-                    id: Date.now(),
-                    originalName: file.name,
-                    newName: newFileName,
-                    vendor: metadata.vendor,
-                    amount: metadata.amount,
-                    dateProcessed: new Date().toISOString(),
-                    data: arrayBuffer
-                };
-                
-                this.receipts.push(receipt);
-                await this.saveReceipts();
-                
-                // Auto-download the processed receipt
-                this.downloadReceipt(receipt);
-                
-                this.showStatus(`Receipt processed: ${newFileName}`, 'success');
-            } else {
-                this.showStatus('Could not extract vendor and amount from PDF', 'error');
-            }
+            return result.success || true; // Consider any successful response as success
             
         } catch (error) {
-            console.error('Error processing receipt:', error);
-            this.showStatus(`Error processing receipt: ${error.message}`, 'error');
+            console.error(`Error processing ${file.name}:`, error);
+            
+            // Fallback to simple renaming for any error
+            this.downloadFileWithFallbackName(file);
+            return false;
         }
     }
 
-    extractMetadata(text) {
-        const metadata = { vendor: null, amount: null };
-        
-        // Enhanced vendor detection patterns
-        const vendorPatterns = [
-            // Specific companies from your receipts
-            /(?:^|\s)(amazon|doordash|2modern|dynamo donut|starbucks|walmart|target|costco|home depot|best buy|apple|microsoft|google|uber|lyft|grubhub|mcdonalds|subway|chipotle)(?:\s|$)/i,
-            
-            // Email-based detection
-            /(?:^|\s)([A-Za-z0-9\s&]+)\s+<[^>]+@([^>]+)>/i,
-            
-            // Order confirmation patterns
-            /([A-Za-z0-9\s&]+)\s+Order\s+Confirmation/i,
-            
-            // Thank you patterns
-            /Thank you for shopping at\s+([A-Za-z0-9\s&]+)/i,
-            
-            // Generic business patterns
-            /(?:^|\s)([A-Z][a-zA-Z\s&]+?)\s+(?:Furniture|Lighting|Food|Delivery|Coffee|Restaurant|Store|Inc|LLC|Corp|Co\.)/i
-        ];
-        
-        // Try to find vendor
-        for (const pattern of vendorPatterns) {
-            const match = text.match(pattern);
-            if (match) {
-                let vendor = match[1].trim();
-                // Clean up common suffixes
-                vendor = vendor.replace(/\s+(Inc|LLC|Corp|Co\.|Furniture|Lighting|Food|Delivery)$/i, '');
-                metadata.vendor = vendor;
-                break;
-            }
-        }
-        
-        // Enhanced amount patterns based on your receipts
-        const amountPatterns = [
-            // Most specific patterns first
-            /Total[:\s]*\$(\d+\.\d{2})/i,
-            /Grand Total[:\s]*\$(\d+\.\d{2})/i,
-            /total[:\s]*\$(\d+\.\d{2})/i,
-            /grand total[:\s]*\$(\d+\.\d{2})/i,
-            
-            // Payment patterns
-            /Payment[:\s]*\$(\d+\.\d{2})/i,
-            /Amount[:\s]*\$(\d+\.\d{2})/i,
-            
-            // Generic dollar patterns (less specific)
-            /\$(\d+\.\d{2})/g
-        ];
-        
-        const amounts = [];
-        for (const pattern of amountPatterns) {
-            let match;
-            while ((match = pattern.exec(text)) !== null) {
-                const amount = parseFloat(match[1]);
-                if (amount > 0) {
-                    amounts.push(amount);
-                }
-            }
-        }
-        
-        // Use the largest amount found (likely the total)
-        if (amounts.length > 0) {
-            metadata.amount = Math.max(...amounts).toFixed(2);
-        }
-        
-        return metadata;
+    createFallbackFileName(originalName) {
+        const today = new Date().toISOString().split('T')[0];
+        const nameWithoutExt = originalName.replace('.pdf', '');
+        return `Receipt_${today}_${nameWithoutExt}.pdf`;
     }
 
-    async saveReceipts() {
-        // Convert ArrayBuffer to base64 for storage
-        const receiptsForStorage = this.receipts.map(receipt => ({
-            ...receipt,
-            data: this.arrayBufferToBase64(receipt.data)
-        }));
-        
-        await chrome.storage.local.set({ receipts: receiptsForStorage });
-    }
-
-    async loadStoredReceipts() {
-        try {
-            // Clear any existing storage first to avoid corruption
-            await chrome.storage.local.clear();
-            console.log('Storage cleared');
-            
-            const result = await chrome.storage.local.get(['receipts']);
-            if (result.receipts) {
-                // Convert base64 back to ArrayBuffer
-                this.receipts = result.receipts.map(receipt => ({
-                    ...receipt,
-                    data: this.base64ToArrayBuffer(receipt.data)
-                }));
-            }
-        } catch (error) {
-            console.error('Error loading stored receipts:', error);
-            // Clear storage if there's an error
-            await chrome.storage.local.clear();
-            this.receipts = [];
-        }
-    }
-
-    arrayBufferToBase64(buffer) {
-        let binary = '';
-        const bytes = new Uint8Array(buffer);
-        for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        return btoa(binary);
-    }
-
-    base64ToArrayBuffer(base64) {
-        const binaryString = atob(base64);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-        return bytes.buffer;
-    }
-
-
-
-    downloadReceipt(receipt) {
-        const blob = new Blob([receipt.data], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = receipt.newName;
-        a.click();
-        URL.revokeObjectURL(url);
+    downloadFileWithFallbackName(file) {
+        const fallbackName = this.createFallbackFileName(file.name);
+        this.downloadFile(file, fallbackName);
     }
 
     downloadFile(file, newName) {
@@ -379,28 +247,66 @@ Check console for more info.`, 'error');
         URL.revokeObjectURL(url);
     }
 
+    async checkGoogleDriveStatus() {
+        try {
+            const response = await fetch('https://bootleg-expensify.onrender.com/auth/status', {
+                credentials: 'include'
+            });
+            const data = await response.json();
+            this.updateDriveStatus(data.authenticated);
+        } catch (error) {
+            console.error('Error checking Google Drive status:', error);
+            this.updateDriveStatus(false);
+        }
+    }
+
+    updateDriveStatus(isConnected) {
+        const statusText = document.getElementById('driveStatusText');
+        const connectBtn = document.getElementById('driveConnectBtn');
+
+        if (isConnected) {
+            statusText.textContent = 'Google Drive: Connected';
+            statusText.className = 'drive-status-text drive-connected';
+            connectBtn.style.display = 'none';
+        } else {
+            statusText.textContent = 'Google Drive: Not connected';
+            statusText.className = 'drive-status-text';
+            connectBtn.style.display = 'block';
+        }
+    }
+
+    connectGoogleDrive() {
+        // Open Google Drive authentication in new tab
+        const authUrl = 'https://bootleg-expensify.onrender.com/auth/google';
+        window.open(authUrl, '_blank', 'width=500,height=600');
+        
+        // Check status periodically to see when authentication completes
+        const checkInterval = setInterval(async () => {
+            await this.checkGoogleDriveStatus();
+            const statusText = document.getElementById('driveStatusText');
+            if (statusText.textContent.includes('Connected')) {
+                clearInterval(checkInterval);
+                this.showStatus('✅ Google Drive connected successfully!', 'success');
+            }
+        }, 2000);
+
+        // Stop checking after 2 minutes
+        setTimeout(() => {
+            clearInterval(checkInterval);
+        }, 120000);
+    }
+
     showStatus(message, type) {
         const status = document.getElementById('status');
         status.textContent = message;
         status.className = `status ${type}`;
         status.style.display = 'block';
         
-        // Keep messages visible much longer, with special handling for multiline messages
-        const duration = type === 'success' ? 12000 : 15000;
+        // Keep messages visible for appropriate duration
+        const duration = type === 'success' ? 8000 : 10000;
         setTimeout(() => {
             status.style.display = 'none';
         }, duration);
-        
-        // Handle multiline messages
-        if (message.includes('\n')) {
-            status.style.whiteSpace = 'pre-line';
-            status.style.fontSize = '12px';
-            status.style.lineHeight = '1.4';
-        } else {
-            status.style.whiteSpace = 'normal';
-            status.style.fontSize = '14px';
-            status.style.lineHeight = '1.2';
-        }
     }
 }
 

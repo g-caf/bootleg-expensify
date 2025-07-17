@@ -2,9 +2,26 @@ const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const pdf = require('pdf-parse');
+const session = require('express-session');
+const { google } = require('googleapis');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+
+// Google OAuth configuration
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID || '527047051561-u5ui6k9al9rni8b5nq5rv7f2lm8nn4t7.apps.googleusercontent.com',
+  process.env.GOOGLE_CLIENT_SECRET || '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',
+  process.env.GOOGLE_REDIRECT_URI || 'https://bootleg-expensify.onrender.com/auth/google/callback'
+);
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'expense-gadget-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false } // Set to true in production with HTTPS
+}));
 
 // CORS configuration for Chrome extensions
 app.use(cors({
@@ -546,6 +563,19 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
       outputFilename = `Receipt ${dateStr}.pdf`;
     }
     
+    // Upload to Google Drive if user is authenticated
+    let driveUpload = null;
+    if (req.session.googleTokens) {
+      console.log('Uploading to Google Drive...');
+      try {
+        driveUpload = await uploadToGoogleDrive(req.file.buffer, outputFilename, req.session.googleTokens);
+        console.log('Google Drive upload result:', driveUpload);
+      } catch (driveError) {
+        console.error('Google Drive upload failed:', driveError);
+        driveUpload = { success: false, error: driveError.message };
+      }
+    }
+    
     // Memory cleanup
     req.file = null;
     
@@ -555,7 +585,8 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
       receiptDate,
       filename: outputFilename,
       success: !!(vendor && amount),
-      textLength: text.length
+      textLength: text.length,
+      googleDrive: driveUpload
     });
     
   } catch (error) {
@@ -572,6 +603,119 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+
+// Google Drive authentication routes
+app.get('/auth/google', (req, res) => {
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['https://www.googleapis.com/auth/drive.file'],
+    prompt: 'consent'
+  });
+  res.redirect(authUrl);
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+  const { code } = req.query;
+  
+  try {
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+    
+    // Store tokens in session
+    req.session.googleTokens = tokens;
+    
+    res.send(`
+      <html>
+        <body>
+          <h2>✅ Google Drive Connected Successfully!</h2>
+          <p>You can now close this window and return to the extension.</p>
+          <script>window.close();</script>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Error getting Google tokens:', error);
+    res.status(500).send(`
+      <html>
+        <body>
+          <h2>❌ Authentication Failed</h2>
+          <p>Error: ${error.message}</p>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// Check authentication status
+app.get('/auth/status', (req, res) => {
+  const isAuthenticated = !!(req.session.googleTokens);
+  res.json({ authenticated: isAuthenticated });
+});
+
+// Create Google Drive folder and upload file
+async function uploadToGoogleDrive(fileBuffer, fileName, tokens) {
+  try {
+    // Set credentials
+    oauth2Client.setCredentials(tokens);
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    
+    // Find or create "Expense Receipts" folder
+    let folderId;
+    
+    // Search for existing folder
+    const folderSearch = await drive.files.list({
+      q: "name='Expense Receipts' and mimeType='application/vnd.google-apps.folder'",
+      fields: 'files(id, name)'
+    });
+    
+    if (folderSearch.data.files.length > 0) {
+      folderId = folderSearch.data.files[0].id;
+    } else {
+      // Create folder
+      const folderMetadata = {
+        name: 'Expense Receipts',
+        mimeType: 'application/vnd.google-apps.folder'
+      };
+      
+      const folder = await drive.files.create({
+        resource: folderMetadata,
+        fields: 'id'
+      });
+      folderId = folder.data.id;
+    }
+    
+    // Upload file to folder
+    const fileMetadata = {
+      name: fileName,
+      parents: [folderId]
+    };
+    
+    const media = {
+      mimeType: 'application/pdf',
+      body: require('stream').Readable.from(fileBuffer)
+    };
+    
+    const file = await drive.files.create({
+      resource: fileMetadata,
+      media: media,
+      fields: 'id, name, webViewLink'
+    });
+    
+    return {
+      success: true,
+      fileId: file.data.id,
+      fileName: file.data.name,
+      webViewLink: file.data.webViewLink
+    };
+    
+  } catch (error) {
+    console.error('Error uploading to Google Drive:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Receipt parser server running on port ${PORT}`);
