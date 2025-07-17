@@ -144,6 +144,7 @@ function extractAmount(text) {
 
 // Parse filename for vendor, amount, and date info
 function parseFilename(filename) {
+  console.log('  parseFilename called with:', filename);
   const result = { vendor: null, amount: null, date: null };
   
   // Common filename patterns
@@ -164,38 +165,56 @@ function parseFilename(filename) {
     /^([A-Za-z\s]+)/i
   ];
   
-  for (const pattern of patterns) {
+  console.log('  Testing', patterns.length, 'patterns...');
+  
+  for (let i = 0; i < patterns.length; i++) {
+    const pattern = patterns[i];
     const match = filename.match(pattern);
+    console.log('    Pattern', i + 1, ':', pattern, '-> Match:', match);
+    
     if (match) {
+      console.log('      Match groups:', match);
+      
       if (match[1] && !result.vendor) {
-        result.vendor = match[1].trim()
+        const rawVendor = match[1].trim()
           .replace(/\s*(receipt|order|invoice)\s*/i, '')
           .replace(/\s+/g, ' ')
           .trim();
+        result.vendor = rawVendor;
+        console.log('      Set vendor:', rawVendor);
       }
       
       // Look for amount in different capture groups
       if (match[2] && match[2].includes('.') && !result.amount) {
         result.amount = match[2];
+        console.log('      Set amount from group 2:', match[2]);
       } else if (match[3] && match[3].includes('.') && !result.amount) {
         result.amount = match[3];
+        console.log('      Set amount from group 3:', match[3]);
       }
       
       // Look for date in different capture groups
       if (match[2] && match[2].includes('-') && !result.date) {
         result.date = match[2];
+        console.log('      Set date from group 2:', match[2]);
       } else if (match[3] && match[3].includes('-') && !result.date) {
         result.date = match[3];
+        console.log('      Set date from group 3:', match[3]);
       } else if (match[1] && match[1].includes('-') && !result.date) {
         result.date = match[1];
+        console.log('      Set date from group 1:', match[1]);
       }
       
+      console.log('      Result so far:', result);
+      
       if (result.vendor || result.amount || result.date) {
+        console.log('      Breaking because we found something');
         break;
       }
     }
   }
   
+  console.log('  Final parseFilename result:', result);
   return result;
 }
 
@@ -263,20 +282,41 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     req.file.buffer = null;
     
     // Extract vendor, amount, and date from PDF text
+    console.log('--- PDF TEXT EXTRACTION ---');
     let vendor = extractVendor(text);
     let amount = extractAmount(text);
     let receiptDate = extractDate(text);
+    console.log('PDF extraction results:', { vendor, amount, receiptDate });
+    
+    // Check fallback condition
+    console.log('--- FALLBACK CHECK ---');
+    console.log('Vendor found:', !!vendor, 'Amount found:', !!amount);
+    console.log('Should trigger fallback:', !vendor || !amount);
     
     // If PDF text extraction failed to find vendor/amount, try filename parsing
     if (!vendor || !amount) {
-      console.log('PDF text extraction incomplete, trying filename parsing...');
+      console.log('--- FILENAME PARSING FALLBACK ---');
+      console.log('Original filename:', req.file.originalname);
       const filenameInfo = parseFilename(req.file.originalname);
+      console.log('Filename parsing result:', filenameInfo);
+      
+      const oldVendor = vendor;
+      const oldAmount = amount;
+      const oldDate = receiptDate;
+      
       vendor = vendor || filenameInfo.vendor;
       amount = amount || filenameInfo.amount;
       receiptDate = receiptDate || filenameInfo.date;
-      console.log('Filename parsing result:', filenameInfo);
+      
+      console.log('Fallback applied:');
+      console.log('  Vendor:', oldVendor, '->', vendor);
+      console.log('  Amount:', oldAmount, '->', amount);
+      console.log('  Date:', oldDate, '->', receiptDate);
+    } else {
+      console.log('--- NO FALLBACK NEEDED ---');
     }
     
+    console.log('--- FINAL RESULTS ---');
     console.log('Extracted:', { vendor, amount, receiptDate });
     
     // Create output filename with proper format
