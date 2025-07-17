@@ -392,7 +392,7 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     // Parse PDF to extract text
     console.log('Parsing PDF content...');
     const pdfData = await pdf(req.file.buffer, {
-      max: 1, // Focus on first page but with better extraction
+      max: 5, // Scan multiple pages to find totals (usually on last page)
       version: 'v1.10.100',
       normalizeWhitespace: false, // Try without normalization
       verbosity: 0 // Reduce noise
