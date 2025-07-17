@@ -267,9 +267,9 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     let amount = extractAmount(text);
     let receiptDate = extractDate(text);
     
-    // If PDF text extraction failed (image-based PDF), try filename parsing
-    if ((!vendor || !amount) && text.length < 50) {
-      console.log('PDF text extraction minimal, trying filename parsing...');
+    // If PDF text extraction failed to find vendor/amount, try filename parsing
+    if (!vendor || !amount) {
+      console.log('PDF text extraction incomplete, trying filename parsing...');
       const filenameInfo = parseFilename(req.file.originalname);
       vendor = vendor || filenameInfo.vendor;
       amount = amount || filenameInfo.amount;
