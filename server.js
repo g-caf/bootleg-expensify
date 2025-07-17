@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
+const pdf = require('pdf-parse');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -150,13 +151,16 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     
     console.log('Processing PDF:', req.file.originalname, 'Size:', req.file.size);
     
-    // Temporary: Manual vendor/amount input for demonstration
-    console.log('Using demo data for vendor/amount extraction...');
+    // Parse PDF to extract text
+    console.log('Parsing PDF content...');
+    const pdfData = await pdf(req.file.buffer, {
+      max: 1, // Only first page to save memory
+      version: 'v1.10.100'
+    });
     
-    // For demo purposes, let's use some sample data
-    // In a real implementation, you'd parse the PDF content
-    const filename = req.file.originalname.toLowerCase();
-    let text = `Amazon Order Receipt Total: $29.99 Date: July 14, 2025`;
+    const text = pdfData.text;
+    console.log('Extracted text length:', text.length);
+    console.log('First 200 chars:', text.substring(0, 200));
     
     // Clear buffer to free memory
     req.file.buffer = null;
