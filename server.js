@@ -224,6 +224,15 @@ function parseFilename(filename) {
 // Extract date from text
 function extractDate(text) {
   const datePatterns = [
+    // "June 23rd, 2025" format (with ordinal)
+    /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th),\s+\d{4})/gi,
+    
+    // "placed on June 23rd, 2025" format
+    /placed on\s+((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th),\s+\d{4})/gi,
+    
+    // "delivered on June 23rd, 2025" format
+    /delivered on\s+((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th),\s+\d{4})/gi,
+    
     // MM/DD/YYYY format
     /(\d{1,2}\/\d{1,2}\/\d{4})/g,
     // MM-DD-YYYY format
@@ -273,8 +282,9 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     // Parse PDF to extract text
     console.log('Parsing PDF content...');
     const pdfData = await pdf(req.file.buffer, {
-      max: 1, // Only first page to save memory
-      version: 'v1.10.100'
+      max: 3, // Try more pages to get complete text
+      version: 'v1.10.100',
+      normalizeWhitespace: true
     });
     
     const text = pdfData.text;
