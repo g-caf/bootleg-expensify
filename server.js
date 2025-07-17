@@ -78,14 +78,14 @@ function extractAmount(text) {
     /Payment[:\s]*\$(\d+\.\d{2})/i,
     /Amount[:\s]*\$(\d+\.\d{2})/i,
     
-    // Generic dollar patterns (less specific)
-    /\$(\d+\.\d{2})/g
+    // Generic dollar patterns (less specific) - removed global flag
+    /\$(\d+\.\d{2})/i
   ];
   
   const amounts = [];
   for (const pattern of amountPatterns) {
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
+    const match = pattern.exec(text);
+    if (match) {
       const amount = parseFloat(match[1]);
       if (amount > 0) {
         amounts.push(amount);
