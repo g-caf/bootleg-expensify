@@ -8,11 +8,14 @@ class ExpenseGadget {
         console.log('=== EXPENSEGADGET CONSTRUCTOR ===');
         this.currentQueue = [];
         this.isProcessing = false;
+        this.currentTab = 'scan';
+        this.searchDebounceTimer = null;
         this.init();
     }
 
     async init() {
         this.setupEventListeners();
+        this.setupTabs();
         await this.checkGoogleDriveStatus();
     }
 
@@ -20,7 +23,8 @@ class ExpenseGadget {
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const closeBtn = document.getElementById('closeBtn');
-        const driveConnectBtn = document.getElementById('driveConnectBtn');
+        const googleDriveSection = document.getElementById('googleDriveSection');
+        const searchInput = document.getElementById('searchInput');
 
         // Close button
         closeBtn.addEventListener('click', () => {
@@ -38,9 +42,9 @@ class ExpenseGadget {
             this.processFiles(e.target.files);
         });
 
-        // Google Drive connect button
-        driveConnectBtn.addEventListener('click', () => {
-            this.connectGoogleDrive();
+        // Google Drive section (entire section is clickable)
+        googleDriveSection.addEventListener('click', () => {
+            this.handleDriveCheckboxClick();
         });
         
         // Gmail scan button
@@ -48,6 +52,39 @@ class ExpenseGadget {
         gmailScanBtn.addEventListener('click', () => {
             this.scanGmail();
         });
+
+        // Search input
+        searchInput.addEventListener('input', (e) => {
+            this.handleSearchInput(e.target.value);
+        });
+    }
+
+    setupTabs() {
+        const tabs = document.querySelectorAll('.tab');
+        const panels = document.querySelectorAll('.tab-panel');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.getAttribute('data-tab');
+                this.switchTab(tabName);
+            });
+        });
+    }
+
+    switchTab(tabName) {
+        // Update active tab
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+        // Update active panel
+        document.querySelectorAll('.tab-panel').forEach(panel => {
+            panel.classList.remove('active');
+        });
+        document.getElementById(`${tabName}-panel`).classList.add('active');
+
+        this.currentTab = tabName;
     }
 
     handleDragOver(e) {
@@ -268,19 +305,28 @@ class ExpenseGadget {
 
     updateDriveStatus(isConnected) {
         const statusText = document.getElementById('driveStatusText');
-        const connectBtn = document.getElementById('driveConnectBtn');
+        const checkbox = document.getElementById('driveCheckbox');
         const gmailScanBtn = document.getElementById('gmailScanBtn');
 
         if (isConnected) {
-            statusText.textContent = 'Google Drive: Connected';
-            statusText.className = 'drive-status-text drive-connected';
-            connectBtn.style.display = 'none';
+            statusText.textContent = 'Connect to Google';
+            statusText.className = 'drive-status-text connected'; // This will hide the text
+            checkbox.className = 'drive-checkbox connected';
             gmailScanBtn.disabled = false; // Enable Gmail scan when connected
         } else {
-            statusText.textContent = 'Google Drive: Not connected';
+            statusText.textContent = 'Connect to Google';
             statusText.className = 'drive-status-text';
-            connectBtn.style.display = 'block';
+            checkbox.className = 'drive-checkbox';
             gmailScanBtn.disabled = true; // Disable Gmail scan when not connected
+        }
+    }
+
+    handleDriveCheckboxClick() {
+        const checkbox = document.getElementById('driveCheckbox');
+        const isConnected = checkbox.classList.contains('connected');
+        
+        if (!isConnected) {
+            this.connectGoogleDrive();
         }
     }
 
@@ -403,6 +449,158 @@ class ExpenseGadget {
         });
         
         scanResults.innerHTML = html;
+    }
+
+    handleSearchInput(query) {
+        // Clear previous debounce timer
+        if (this.searchDebounceTimer) {
+            clearTimeout(this.searchDebounceTimer);
+        }
+
+        // Debounce search to avoid too many requests
+        this.searchDebounceTimer = setTimeout(() => {
+            if (query.trim().length > 0) {
+                this.searchEmails(query.trim());
+            } else {
+                this.clearSearchResults();
+            }
+        }, 500);
+    }
+
+    async searchEmails(query) {
+        console.log('=== EMAIL SEARCH STARTED ===');
+        console.log('Query:', query);
+        
+        const searchResults = document.getElementById('searchResults');
+        
+        // Show loading state
+        searchResults.innerHTML = '<div style="color: #6b7280; text-align: center; padding: 20px;">🔍 Searching...</div>';
+        
+        try {
+            const response = await fetch('https://bootleg-expensify.onrender.com/search-emails', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ query })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+            
+            const results = await response.json();
+            console.log('Search results:', results);
+            
+            this.displaySearchResults(results);
+            
+        } catch (error) {
+            console.error('Search error:', error);
+            searchResults.innerHTML = `<div style="color: #dc2626; text-align: center; padding: 20px;">❌ Search failed: ${error.message}</div>`;
+        }
+    }
+
+    displaySearchResults(results) {
+        const searchResults = document.getElementById('searchResults');
+        
+        if (!results || results.length === 0) {
+            searchResults.innerHTML = '<div style="color: #6b7280; text-align: center; padding: 20px;">No emails found</div>';
+            return;
+        }
+        
+        let html = '';
+        results.forEach(email => {
+            const emailId = email.id;
+            const subject = email.subject || 'No Subject';
+            const from = email.from || 'Unknown Sender';
+            const date = email.date || 'No Date';
+            
+            html += `<div class="search-result-item">`;
+            html += `<div class="search-result-header">`;
+            html += `<div class="search-result-subject">${this.escapeHtml(subject)}</div>`;
+            html += `<div class="search-result-date">${this.formatDate(date)}</div>`;
+            html += `</div>`;
+            html += `<div class="search-result-from">From: ${this.escapeHtml(from)}</div>`;
+            html += `<button class="convert-btn" onclick="expenseGadget.convertEmailToPdf('${emailId}', this)">Convert to PDF</button>`;
+            html += `</div>`;
+        });
+        
+        searchResults.innerHTML = html;
+    }
+
+    clearSearchResults() {
+        const searchResults = document.getElementById('searchResults');
+        searchResults.innerHTML = '';
+    }
+
+    async convertEmailToPdf(emailId, buttonElement) {
+        console.log('=== CONVERT EMAIL TO PDF ===');
+        console.log('Email ID:', emailId);
+        
+        // Disable button and show loading
+        buttonElement.disabled = true;
+        buttonElement.textContent = 'Converting...';
+        
+        try {
+            const response = await fetch('https://bootleg-expensify.onrender.com/convert-email', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ emailId })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            console.log('Convert result:', result);
+            
+            if (result.success) {
+                buttonElement.textContent = '✅ Converted';
+                buttonElement.style.background = '#22c55e';
+                this.showStatus(`✅ Successfully converted email to PDF: ${result.filename}`, 'success');
+            } else {
+                throw new Error(result.error || 'Conversion failed');
+            }
+            
+        } catch (error) {
+            console.error('Convert error:', error);
+            buttonElement.textContent = '❌ Failed';
+            buttonElement.style.background = '#dc2626';
+            this.showStatus(`❌ Failed to convert email: ${error.message}`, 'error');
+        }
+        
+        // Re-enable button after a delay
+        setTimeout(() => {
+            buttonElement.disabled = false;
+            if (buttonElement.textContent === '❌ Failed') {
+                buttonElement.textContent = 'Convert to PDF';
+                buttonElement.style.background = '#ff5722';
+            }
+        }, 3000);
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    formatDate(dateString) {
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric'
+            });
+        } catch (e) {
+            return dateString;
+        }
     }
 }
 

@@ -923,6 +923,120 @@ app.post('/debug/test-browserless', async (req, res) => {
   }
 });
 
+// Email search endpoint
+app.post('/search-emails', async (req, res) => {
+    try {
+        const { query } = req.body;
+        
+        if (!query || query.trim().length === 0) {
+            return res.status(400).json({ error: 'Search query is required' });
+        }
+
+        // Check if user is authenticated
+        if (!req.session.googleTokens) {
+            return res.status(401).json({ error: 'Not authenticated with Google' });
+        }
+
+        oauth2Client.setCredentials(req.session.googleTokens);
+
+        // Search Gmail with the user's query
+        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+        
+        // Build search query - we'll search in subject, from, and body
+        const searchQuery = `${query}`;
+        
+        console.log('Searching Gmail with query:', searchQuery);
+        
+        const searchResponse = await gmail.users.messages.list({
+            userId: 'me',
+            q: searchQuery,
+            maxResults: 20 // Limit results for UI performance
+        });
+
+        if (!searchResponse.data.messages || searchResponse.data.messages.length === 0) {
+            return res.json([]);
+        }
+
+        // Get message details for each result
+        const emailPromises = searchResponse.data.messages.map(async (message) => {
+            try {
+                const messageResponse = await gmail.users.messages.get({
+                    userId: 'me',
+                    id: message.id,
+                    format: 'metadata',
+                    metadataHeaders: ['From', 'Subject', 'Date']
+                });
+
+                const headers = messageResponse.data.payload.headers || [];
+                const subject = headers.find(h => h.name === 'Subject')?.value || 'No Subject';
+                const from = headers.find(h => h.name === 'From')?.value || 'Unknown Sender';
+                const date = headers.find(h => h.name === 'Date')?.value || 'No Date';
+
+                return {
+                    id: message.id,
+                    subject: subject,
+                    from: from,
+                    date: date
+                };
+            } catch (error) {
+                console.error(`Error getting message ${message.id}:`, error);
+                return null;
+            }
+        });
+
+        const emails = await Promise.all(emailPromises);
+        const validEmails = emails.filter(email => email !== null);
+
+        console.log(`Found ${validEmails.length} emails for search query "${query}"`);
+        res.json(validEmails);
+
+    } catch (error) {
+        console.error('Email search error:', error);
+        res.status(500).json({ error: 'Failed to search emails' });
+    }
+});
+
+// Convert individual email to PDF endpoint
+app.post('/convert-email', async (req, res) => {
+    try {
+        const { emailId } = req.body;
+        
+        if (!emailId) {
+            return res.status(400).json({ error: 'Email ID is required' });
+        }
+
+        // Check if user is authenticated
+        if (!req.session.googleTokens) {
+            return res.status(401).json({ error: 'Not authenticated with Google' });
+        }
+
+        oauth2Client.setCredentials(req.session.googleTokens);
+
+        // Process the specific email
+        const result = await processEmailContent(emailId);
+        
+        if (result.success) {
+            res.json({
+                success: true,
+                filename: result.filename,
+                vendor: result.vendor,
+                amount: result.amount,
+                receiptDate: result.receiptDate,
+                googleDrive: result.googleDrive
+            });
+        } else {
+            res.status(500).json({ 
+                success: false, 
+                error: result.error || 'Failed to process email' 
+            });
+        }
+
+    } catch (error) {
+        console.error('Email conversion error:', error);
+        res.status(500).json({ error: 'Failed to convert email' });
+    }
+});
+
 // Gmail scanning endpoint
 app.post('/scan-gmail', async (req, res) => {
   try {
