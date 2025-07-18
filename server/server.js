@@ -719,7 +719,7 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
     if (req.session.googleTokens) {
       console.log('Uploading to Google Drive...');
       try {
-        driveUpload = await uploadToGoogleDrive(originalBuffer, outputFilename, req.session.googleTokens);
+        driveUpload = await uploadToGoogleDrive(originalBuffer, outputFilename, receiptDate, req.session.googleTokens);
         console.log('Google Drive upload result:', driveUpload);
       } catch (driveError) {
         console.error('Google Drive upload failed:', driveError);
@@ -804,41 +804,79 @@ app.get('/auth/status', (req, res) => {
 });
 
 // Create Google Drive folder and upload file
-async function uploadToGoogleDrive(fileBuffer, fileName, tokens) {
+async function uploadToGoogleDrive(fileBuffer, fileName, receiptDate, tokens) {
   try {
     // Set credentials
     oauth2Client.setCredentials(tokens);
     const drive = google.drive({ version: 'v3', auth: oauth2Client });
     
     // Find or create "Expense Receipts" folder
-    let folderId;
+    let mainFolderId;
     
-    // Search for existing folder
-    const folderSearch = await drive.files.list({
+    // Search for existing main folder
+    const mainFolderSearch = await drive.files.list({
       q: "name='Expense Receipts' and mimeType='application/vnd.google-apps.folder'",
       fields: 'files(id, name)'
     });
     
-    if (folderSearch.data.files.length > 0) {
-      folderId = folderSearch.data.files[0].id;
+    if (mainFolderSearch.data.files.length > 0) {
+      mainFolderId = mainFolderSearch.data.files[0].id;
     } else {
-      // Create folder
-      const folderMetadata = {
+      // Create main folder
+      const mainFolderMetadata = {
         name: 'Expense Receipts',
         mimeType: 'application/vnd.google-apps.folder'
       };
       
-      const folder = await drive.files.create({
-        resource: folderMetadata,
+      const mainFolder = await drive.files.create({
+        resource: mainFolderMetadata,
         fields: 'id'
       });
-      folderId = folder.data.id;
+      mainFolderId = mainFolder.data.id;
     }
     
-    // Upload file to folder
+    // Create month/year folder name
+    const date = receiptDate ? new Date(receiptDate) : new Date();
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const monthFolderName = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+    
+    console.log(`Looking for month folder: ${monthFolderName}`);
+    
+    // Find or create month folder within main folder
+    let monthFolderId;
+    
+    // Search for existing month folder
+    const monthFolderSearch = await drive.files.list({
+      q: `name='${monthFolderName}' and mimeType='application/vnd.google-apps.folder' and '${mainFolderId}' in parents`,
+      fields: 'files(id, name)'
+    });
+    
+    if (monthFolderSearch.data.files.length > 0) {
+      monthFolderId = monthFolderSearch.data.files[0].id;
+      console.log(`Found existing month folder: ${monthFolderName}`);
+    } else {
+      // Create month folder
+      const monthFolderMetadata = {
+        name: monthFolderName,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [mainFolderId]
+      };
+      
+      const monthFolder = await drive.files.create({
+        resource: monthFolderMetadata,
+        fields: 'id'
+      });
+      monthFolderId = monthFolder.data.id;
+      console.log(`Created new month folder: ${monthFolderName}`);
+    }
+    
+    // Upload file to month folder
     const fileMetadata = {
       name: fileName,
-      parents: [folderId]
+      parents: [monthFolderId]
     };
     
     const media = {
@@ -852,10 +890,13 @@ async function uploadToGoogleDrive(fileBuffer, fileName, tokens) {
       fields: 'id, name, webViewLink'
     });
     
+    console.log(`Uploaded ${fileName} to ${monthFolderName} folder`);
+    
     return {
       success: true,
       fileId: file.data.id,
       fileName: file.data.name,
+      monthFolder: monthFolderName,
       webViewLink: file.data.webViewLink
     };
     
