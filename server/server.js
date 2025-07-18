@@ -935,19 +935,24 @@ app.post('/scan-gmail', async (req, res) => {
     oauth2Client.setCredentials(req.session.googleTokens);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     
-    // Search for order confirmation emails (no attachment requirement) - broader search
+    // Focused search for RECEIPTS (not delivery notifications) from Big 3 platforms
     const query = [
       '(',
-      // Subject patterns
-      'subject:receipt OR subject:order OR subject:confirmation OR subject:invoice OR subject:delivery OR subject:shipped OR subject:purchase OR subject:payment OR subject:transaction',
+      // Amazon order confirmations (NOT deliveries)
+      'from:amazon.com (subject:"Ordered:" OR subject:"Order Confirmation" OR subject:"Your Amazon.com order")',
       ') OR (',
-      // Sender patterns (popular vendors)
-      'from:amazon.com OR from:instacart.com OR from:doordash.com OR from:uber.com OR from:grubhub.com OR from:starbucks.com OR from:target.com OR from:walmart.com OR from:costco.com OR from:bestbuy.com OR from:homedepot.com OR from:apple.com OR from:paypal.com',
+      // DoorDash receipts
+      'from:doordash.com (subject:receipt OR subject:"Order confirmed" OR subject:"Your DoorDash receipt")',
       ') OR (',
-      // Common receipt phrases in any part of email
-      'subject:"order confirmation" OR subject:"your receipt" OR subject:"payment receipt" OR subject:"purchase confirmation" OR subject:"transaction receipt"',
+      // Instacart receipts  
+      'from:instacart.com (subject:receipt OR subject:"Your Instacart order receipt" OR subject:"Order receipt")',
       ')',
-      'newer_than:30d' // Last 30 days
+      // Exclude delivery/shipping notifications
+      '-subject:Shipped: -subject:Delivered: -subject:"Out for delivery" -subject:"Your package"',
+      // Exclude refunds and cancellations
+      '-subject:refund -subject:cancelled -subject:canceled -subject:"order cancelled"',
+      // Last 30 days
+      'newer_than:30d'
     ].join(' ');
     
     console.log('Gmail search query:', query);
