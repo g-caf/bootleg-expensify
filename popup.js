@@ -42,6 +42,12 @@ class ExpenseGadget {
         driveConnectBtn.addEventListener('click', () => {
             this.connectGoogleDrive();
         });
+        
+        // Gmail scan button
+        const gmailScanBtn = document.getElementById('gmailScanBtn');
+        gmailScanBtn.addEventListener('click', () => {
+            this.scanGmail();
+        });
     }
 
     handleDragOver(e) {
@@ -263,15 +269,18 @@ class ExpenseGadget {
     updateDriveStatus(isConnected) {
         const statusText = document.getElementById('driveStatusText');
         const connectBtn = document.getElementById('driveConnectBtn');
+        const gmailScanBtn = document.getElementById('gmailScanBtn');
 
         if (isConnected) {
             statusText.textContent = 'Google Drive: Connected';
             statusText.className = 'drive-status-text drive-connected';
             connectBtn.style.display = 'none';
+            gmailScanBtn.disabled = false; // Enable Gmail scan when connected
         } else {
             statusText.textContent = 'Google Drive: Not connected';
             statusText.className = 'drive-status-text';
             connectBtn.style.display = 'block';
+            gmailScanBtn.disabled = true; // Disable Gmail scan when not connected
         }
     }
 
@@ -307,6 +316,93 @@ class ExpenseGadget {
         setTimeout(() => {
             status.style.display = 'none';
         }, duration);
+    }
+
+    async scanGmail() {
+        console.log('=== GMAIL SCAN STARTED ===');
+        
+        const gmailScanBtn = document.getElementById('gmailScanBtn');
+        const scanResults = document.getElementById('scanResults');
+        
+        // Disable button and show loading
+        gmailScanBtn.disabled = true;
+        gmailScanBtn.textContent = 'Scanning...';
+        
+        // Show results section
+        scanResults.style.display = 'block';
+        scanResults.innerHTML = '<div style="color: #6b7280;">🔍 Scanning your email for PDF receipts...</div>';
+        
+        try {
+            const response = await fetch('https://bootleg-expensify.onrender.com/scan-gmail', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            console.log('Gmail scan result:', result);
+            
+            // Update results display
+            this.displayScanResults(result);
+            
+            // Show success message
+            if (result.receiptsProcessed > 0) {
+                this.showStatus(`✅ Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails!`, 'success');
+            } else if (result.receiptsFound > 0) {
+                this.showStatus(`⚠️ Found ${result.receiptsFound} potential receipt emails, but couldn't process them`, 'warning');
+            } else {
+                this.showStatus('📭 No recent receipt emails with PDF attachments found', 'warning');
+            }
+            
+        } catch (error) {
+            console.error('Gmail scan error:', error);
+            scanResults.innerHTML = `<div style="color: #dc2626;">❌ Error scanning Gmail: ${error.message}</div>`;
+            this.showStatus('❌ Failed to scan Gmail. Check your connection.', 'error');
+        } finally {
+            // Re-enable button
+            gmailScanBtn.disabled = false;
+            gmailScanBtn.textContent = 'Scan Gmail';
+        }
+    }
+
+    displayScanResults(result) {
+        const scanResults = document.getElementById('scanResults');
+        
+        if (result.results.length === 0) {
+            scanResults.innerHTML = '<div style="color: #6b7280;">No PDF receipts found in recent emails</div>';
+            return;
+        }
+        
+        let html = `<div style="font-weight: 500; margin-bottom: 8px;">📧 Found ${result.receiptsFound} emails, processed ${result.receiptsProcessed} receipts:</div>`;
+        
+        result.results.forEach(item => {
+            const status = item.processed ? '✅' : '❌';
+            const statusClass = item.processed ? 'scan-result-success' : 'scan-result-error';
+            
+            html += `<div class="scan-result-item">`;
+            html += `<div class="${statusClass}">${status} ${item.attachment || 'Unknown attachment'}</div>`;
+            
+            if (item.processed) {
+                html += `<div style="font-size: 11px; color: #6b7280; margin-left: 16px;">`;
+                html += `${item.vendor || 'Unknown'} • $${item.amount || '?'} • ${item.receiptDate || 'No date'}`;
+                if (item.googleDrive && item.googleDrive.success) {
+                    html += ` • 📁 ${item.googleDrive.monthFolder}`;
+                }
+                html += `</div>`;
+            } else if (item.error) {
+                html += `<div style="font-size: 11px; color: #dc2626; margin-left: 16px;">${item.error}</div>`;
+            }
+            
+            html += `</div>`;
+        });
+        
+        scanResults.innerHTML = html;
     }
 }
 

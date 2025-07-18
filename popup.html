@@ -205,6 +205,67 @@
             color: #22c55e;
             font-weight: 500;
         }
+        
+        .gmail-scan-section {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .gmail-scan-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        
+        .gmail-scan-btn {
+            background: #f97316;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .gmail-scan-btn:hover:not(:disabled) {
+            background: #ea580c;
+        }
+        
+        .gmail-scan-btn:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+        }
+        
+        .scan-results {
+            margin-top: 12px;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .scan-result-item {
+            padding: 4px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .scan-result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .scan-result-success {
+            color: #059669;
+        }
+        
+        .scan-result-error {
+            color: #dc2626;
+        }
     </style>
 </head>
 <body>
@@ -241,6 +302,17 @@
             <div style="font-size: 11px; color: #6b7280;">
                 Receipts will be automatically uploaded to your "Expense Receipts" folder
             </div>
+        </div>
+        
+        <div class="gmail-scan-section">
+            <div class="gmail-scan-header">
+                <span>📧 Email Receipt Scanner</span>
+                <button class="gmail-scan-btn" id="gmailScanBtn" disabled>Scan Gmail</button>
+            </div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+                Automatically find and process PDF receipts from your email
+            </div>
+            <div class="scan-results" id="scanResults" style="display: none;"></div>
         </div>
     
         <input type="file" id="fileInput" accept=".pdf" multiple style="display: none;">

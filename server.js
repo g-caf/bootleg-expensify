@@ -755,11 +755,279 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Gmail scanning endpoint
+app.post('/scan-gmail', async (req, res) => {
+  try {
+    if (!req.session.googleTokens) {
+      return res.status(401).json({ error: 'Not authenticated with Google' });
+    }
+
+    console.log('=== GMAIL SCAN STARTED ===');
+    
+    // Set credentials
+    oauth2Client.setCredentials(req.session.googleTokens);
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    
+    // Search for emails with receipt indicators
+    const query = [
+      'has:attachment',
+      'filename:pdf',
+      '(subject:receipt OR subject:order OR subject:confirmation OR subject:invoice)',
+      'newer_than:30d' // Last 30 days
+    ].join(' ');
+    
+    console.log('Gmail search query:', query);
+    
+    const searchResponse = await gmail.users.messages.list({
+      userId: 'me',
+      q: query,
+      maxResults: 50
+    });
+    
+    if (!searchResponse.data.messages) {
+      console.log('No receipt emails found');
+      return res.json({ 
+        success: true, 
+        receiptsFound: 0, 
+        receiptsProcessed: 0,
+        results: []
+      });
+    }
+    
+    console.log(`Found ${searchResponse.data.messages.length} potential receipt emails`);
+    
+    const results = [];
+    let processedCount = 0;
+    
+    // Process each email
+    for (const message of searchResponse.data.messages.slice(0, 10)) { // Limit to 10 for now
+      try {
+        console.log(`Processing message ID: ${message.id}`);
+        
+        // Get full message details
+        const messageDetails = await gmail.users.messages.get({
+          userId: 'me',
+          id: message.id
+        });
+        
+        const msg = messageDetails.data;
+        const subject = getHeader(msg.payload.headers, 'Subject') || 'Unknown Subject';
+        const sender = getHeader(msg.payload.headers, 'From') || 'Unknown Sender';
+        
+        console.log(`  Subject: ${subject}`);
+        console.log(`  From: ${sender}`);
+        
+        // Check for PDF attachments
+        const pdfAttachments = await findPDFAttachments(msg.payload, gmail, message.id);
+        
+        if (pdfAttachments.length > 0) {
+          console.log(`  Found ${pdfAttachments.length} PDF attachments`);
+          
+          for (const attachment of pdfAttachments) {
+            try {
+              console.log(`    Processing attachment: ${attachment.filename}`);
+              
+              // Process the PDF attachment using our existing logic
+              const processed = await processPDFAttachment(attachment.data, attachment.filename, req.session.googleTokens);
+              
+              results.push({
+                messageId: message.id,
+                subject: subject,
+                sender: sender,
+                attachment: attachment.filename,
+                processed: processed.success,
+                vendor: processed.vendor,
+                amount: processed.amount,
+                receiptDate: processed.receiptDate,
+                filename: processed.filename,
+                googleDrive: processed.googleDrive,
+                error: processed.error
+              });
+              
+              if (processed.success) {
+                processedCount++;
+              }
+              
+            } catch (attachmentError) {
+              console.error(`Error processing attachment ${attachment.filename}:`, attachmentError);
+              results.push({
+                messageId: message.id,
+                subject: subject,
+                sender: sender,
+                attachment: attachment.filename,
+                processed: false,
+                error: attachmentError.message
+              });
+            }
+          }
+        } else {
+          console.log(`  No PDF attachments found`);
+        }
+        
+      } catch (messageError) {
+        console.error(`Error processing message ${message.id}:`, messageError);
+        results.push({
+          messageId: message.id,
+          processed: false,
+          error: messageError.message
+        });
+      }
+    }
+    
+    console.log(`=== GMAIL SCAN COMPLETE ===`);
+    console.log(`Processed ${processedCount} receipts from ${searchResponse.data.messages.length} emails`);
+    
+    res.json({
+      success: true,
+      receiptsFound: searchResponse.data.messages.length,
+      receiptsProcessed: processedCount,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('Gmail scan error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to get email header
+function getHeader(headers, name) {
+  const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
+  return header ? header.value : null;
+}
+
+// Helper function to find PDF attachments
+async function findPDFAttachments(payload, gmail, messageId) {
+  const attachments = [];
+  
+  async function searchParts(parts) {
+    if (!parts) return;
+    
+    for (const part of parts) {
+      if (part.filename && part.filename.toLowerCase().endsWith('.pdf')) {
+        if (part.body && part.body.attachmentId) {
+          try {
+            // Download attachment
+            const attachment = await gmail.users.messages.attachments.get({
+              userId: 'me',
+              messageId: messageId,
+              id: part.body.attachmentId
+            });
+            
+            // Convert base64url to buffer
+            const data = Buffer.from(attachment.data.data, 'base64url');
+            
+            attachments.push({
+              filename: part.filename,
+              data: data
+            });
+          } catch (error) {
+            console.error(`Error downloading attachment ${part.filename}:`, error);
+          }
+        }
+      }
+      
+      // Recursively search nested parts
+      if (part.parts) {
+        await searchParts(part.parts);
+      }
+    }
+  }
+  
+  await searchParts(payload.parts || [payload]);
+  return attachments;
+}
+
+// Helper function to process PDF attachment (reuse existing logic)
+async function processPDFAttachment(fileBuffer, filename, tokens) {
+  try {
+    console.log(`    Processing PDF: ${filename} (${fileBuffer.length} bytes)`);
+    
+    // Parse PDF to extract text (reuse existing logic)
+    const pdfData = await pdf(fileBuffer, {
+      max: 5,
+      version: 'v1.10.100',
+      normalizeWhitespace: false,
+      verbosity: 0
+    });
+    
+    const text = pdfData.text;
+    console.log(`    Extracted text length: ${text.length}`);
+    
+    // Extract vendor, amount, and date (reuse existing functions)
+    let vendor = extractVendor(text);
+    let amount = extractAmount(text);
+    let receiptDate = extractDate(text);
+    
+    console.log(`    Initial extraction: vendor=${vendor}, amount=${amount}, date=${receiptDate}`);
+    
+    // Apply fallback logic if needed
+    if (!vendor || !amount) {
+      const filenameInfo = parseFilename(filename);
+      
+      if (!vendor && !filenameInfo.vendor && text.length > 50) {
+        const contextVendor = analyzeContext(text);
+        if (contextVendor) {
+          filenameInfo.vendor = contextVendor;
+        }
+      }
+      
+      vendor = vendor || filenameInfo.vendor;
+      amount = amount || filenameInfo.amount;
+      receiptDate = receiptDate || filenameInfo.date;
+    }
+    
+    console.log(`    Final extraction: vendor=${vendor}, amount=${amount}, date=${receiptDate}`);
+    
+    // Create output filename
+    let outputFilename;
+    if (vendor && amount) {
+      const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+      outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
+    } else {
+      const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+      outputFilename = `Receipt ${dateStr}.pdf`;
+    }
+    
+    // Upload to Google Drive
+    let driveUpload = null;
+    if (tokens) {
+      try {
+        driveUpload = await uploadToGoogleDrive(fileBuffer, outputFilename, receiptDate, tokens);
+        console.log(`    Google Drive upload: ${driveUpload.success ? 'SUCCESS' : 'FAILED'}`);
+      } catch (driveError) {
+        console.error(`    Google Drive upload error:`, driveError);
+        driveUpload = { success: false, error: driveError.message };
+      }
+    }
+    
+    return {
+      success: !!(vendor && amount),
+      vendor,
+      amount,
+      receiptDate,
+      filename: outputFilename,
+      textLength: text.length,
+      googleDrive: driveUpload
+    };
+    
+  } catch (error) {
+    console.error(`    PDF processing error:`, error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 // Google Drive authentication routes
 app.get('/auth/google', (req, res) => {
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    scope: ['https://www.googleapis.com/auth/drive.file'],
+    scope: [
+      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/gmail.readonly'
+    ],
     prompt: 'consent'
   });
   res.redirect(authUrl);
