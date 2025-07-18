@@ -328,11 +328,7 @@ class ExpenseGadget {
         const isConnected = checkbox.classList.contains('connected');
         
         if (!isConnected) {
-            // Try Gmail auth first, then Google Drive
-            const gmailAuth = await this.authenticateGmail();
-            if (gmailAuth) {
-                this.connectGoogleDrive();
-            }
+            this.connectGoogleDrive();
         }
     }
 
@@ -380,6 +376,8 @@ class ExpenseGadget {
             if (statusText.textContent.includes('Connected')) {
                 clearInterval(checkInterval);
                 this.showStatus('✅ Google Drive connected successfully!', 'success');
+                // Also check Gmail auth since we use the same OAuth flow
+                await this.checkGmailAuth();
             }
         }, 2000);
 

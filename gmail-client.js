@@ -54,6 +54,16 @@ class GmailClient {
 
     async checkStoredAuth() {
         try {
+            // First try to get token from server (most reliable)
+            const serverToken = await this.getTokenFromServer();
+            if (serverToken) {
+                this.accessToken = serverToken;
+                this.isAuthenticated = true;
+                await chrome.storage.local.set({ gmailAccessToken: serverToken });
+                return true;
+            }
+
+            // Fallback to stored token
             const result = await chrome.storage.local.get(['gmailAccessToken']);
             if (result.gmailAccessToken) {
                 this.accessToken = result.gmailAccessToken;
