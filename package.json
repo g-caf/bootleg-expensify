@@ -12,7 +12,8 @@
     "cors": "^2.8.5",
     "pdf-parse": "^1.1.1",
     "googleapis": "^126.0.1",
-    "express-session": "^1.17.3"
+    "express-session": "^1.17.3",
+    "html-pdf": "^3.0.1"
   },
   "engines": {
     "node": ">=16"

@@ -6,6 +6,7 @@ const session = require('express-session');
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
+const htmlPdf = require('html-pdf');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -1172,10 +1173,10 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
       outputFilename = `Email Receipt ${dateStr}.pdf`;
     }
     
-    // Create a proper PDF receipt using Browserless.io
-    console.log(`    Creating PDF receipt with Browserless.io...`);
+    // Create a proper PDF receipt using html-pdf library
+    console.log(`    📋 Creating PDF receipt with html-pdf library...`);
     
-    const pdfBuffer = await createEmailReceiptPDFViaBrowserless({
+    const pdfBuffer = await createEmailReceiptPDF({
       sender,
       subject,
       vendor: vendor || 'Not found',
@@ -1471,8 +1472,8 @@ function parseEmailDate(dateStr) {
   return null;
 }
 
-// Create a professional PDF receipt using Browserless.io
-async function createEmailReceiptPDFViaBrowserless(data) {
+// Create a professional PDF receipt using html-pdf library
+async function createEmailReceiptPDF(data) {
   try {
     console.log(`    Generating HTML for PDF conversion...`);
     
@@ -1625,64 +1626,44 @@ async function createEmailReceiptPDFViaBrowserless(data) {
 </body>
 </html>`;
     
-    console.log(`    📤 Sending HTML to Browserless.io for PDF conversion...`);
+    console.log(`    📄 Generating PDF with html-pdf library...`);
     console.log(`    🔧 HTML length: ${html.length} characters`);
-    console.log(`    📋 HTML preview: ${html.substring(0, 200)}...`);
     
-    // Check if we have a valid token
-    const token = process.env.BROWSERLESS_TOKEN;
-    if (!token || token === 'YOUR_BROWSERLESS_TOKEN') {
-      console.log(`    ❌ BROWSERLESS_TOKEN not set, falling back to text format`);
-      throw new Error('BROWSERLESS_TOKEN environment variable not set');
-    }
-    
-    console.log(`    🔑 Using Browserless token: ${token.substring(0, 10)}...`);
-    
-    // Call Browserless.io API
-    const browserlessResponse = await fetch('https://chrome.browserless.io/pdf', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+    // PDF generation options
+    const options = {
+      format: 'A4',
+      border: {
+        top: '20px',
+        right: '20px', 
+        bottom: '20px',
+        left: '20px'
       },
-      body: JSON.stringify({
-        html: html,
-        options: {
-          format: 'A4',
-          margin: {
-            top: '20px',
-            right: '20px',
-            bottom: '20px',
-            left: '20px'
-          },
-          printBackground: true,
-          preferCSSPageSize: true,
-          displayHeaderFooter: false,
-          waitUntil: 'networkidle0'
+      type: 'pdf',
+      quality: '75'
+    };
+    
+    // Generate PDF using html-pdf library
+    const pdfBuffer = await new Promise((resolve, reject) => {
+      htmlPdf.create(html, options).toBuffer((err, buffer) => {
+        if (err) {
+          console.error(`    ❌ PDF generation error:`, err);
+          reject(err);
+        } else {
+          console.log(`    ✅ PDF generated successfully: ${buffer.length} bytes`);
+          
+          // Quick check - see if this looks like a valid PDF
+          const pdfHeader = buffer.toString('ascii', 0, 4);
+          console.log(`    🔍 PDF header check: "${pdfHeader}" (should be "%PDF")`);
+          
+          resolve(buffer);
         }
-      })
+      });
     });
-    
-    console.log(`    📡 Browserless.io response status: ${browserlessResponse.status}`);
-    console.log(`    📄 Response headers:`, Object.fromEntries([...browserlessResponse.headers.entries()]));
-    
-    if (!browserlessResponse.ok) {
-      const errorText = await browserlessResponse.text();
-      console.error(`    ❌ Browserless.io error details: ${errorText}`);
-      throw new Error(`Browserless.io API error: ${browserlessResponse.status} ${browserlessResponse.statusText} - ${errorText}`);
-    }
-    
-    const pdfBuffer = await browserlessResponse.buffer();
-    console.log(`    ✅ PDF generated successfully: ${pdfBuffer.length} bytes`);
-    
-    // Quick check - see if this looks like a valid PDF
-    const pdfHeader = pdfBuffer.toString('ascii', 0, 4);
-    console.log(`    🔍 PDF header check: "${pdfHeader}" (should be "%PDF")`);
     
     return pdfBuffer;
     
   } catch (error) {
-    console.error('❌ Error creating PDF with Browserless.io:', error);
+    console.error('❌ Error creating PDF with html-pdf library:', error);
     
     // Fallback to simple text format if PDF generation fails
     console.log('    ⚠️  Falling back to text format...');
