@@ -40,6 +40,7 @@ function saveProcessedEmails(emailIds) {
 // Initialize processed emails set
 const processedEmailIds = loadProcessedEmails();
 console.log(`Loaded ${processedEmailIds.size} previously processed email IDs`);
+console.log('Auth token endpoint available at /auth/token');
 
 // Google OAuth configuration
 const oauth2Client = new google.auth.OAuth2(
