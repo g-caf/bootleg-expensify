@@ -4,6 +4,7 @@ const cors = require('cors');
 const pdf = require('pdf-parse');
 const session = require('express-session');
 const { google } = require('googleapis');
+const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -768,11 +769,10 @@ app.post('/scan-gmail', async (req, res) => {
     oauth2Client.setCredentials(req.session.googleTokens);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     
-    // Search for emails with receipt indicators
+    // Search for order confirmation emails (no attachment requirement)
     const query = [
-      'has:attachment',
-      'filename:pdf',
-      '(subject:receipt OR subject:order OR subject:confirmation OR subject:invoice)',
+      '(subject:receipt OR subject:order OR subject:confirmation OR subject:invoice OR subject:delivery OR subject:shipped)',
+      '(from:amazon.com OR from:instacart.com OR from:doordash.com OR from:uber.com OR from:grubhub.com OR from:starbucks.com OR from:target.com OR from:walmart.com OR subject:"order confirmation" OR subject:"your receipt" OR subject:"payment receipt")',
       'newer_than:30d' // Last 30 days
     ].join(' ');
     
@@ -817,51 +817,46 @@ app.post('/scan-gmail', async (req, res) => {
         console.log(`  Subject: ${subject}`);
         console.log(`  From: ${sender}`);
         
-        // Check for PDF attachments
-        const pdfAttachments = await findPDFAttachments(msg.payload, gmail, message.id);
-        
-        if (pdfAttachments.length > 0) {
-          console.log(`  Found ${pdfAttachments.length} PDF attachments`);
+        // Process the email content itself (convert HTML to PDF)
+        try {
+          console.log(`    Processing email content to PDF`);
           
-          for (const attachment of pdfAttachments) {
-            try {
-              console.log(`    Processing attachment: ${attachment.filename}`);
-              
-              // Process the PDF attachment using our existing logic
-              const processed = await processPDFAttachment(attachment.data, attachment.filename, req.session.googleTokens);
-              
-              results.push({
-                messageId: message.id,
-                subject: subject,
-                sender: sender,
-                attachment: attachment.filename,
-                processed: processed.success,
-                vendor: processed.vendor,
-                amount: processed.amount,
-                receiptDate: processed.receiptDate,
-                filename: processed.filename,
-                googleDrive: processed.googleDrive,
-                error: processed.error
-              });
-              
-              if (processed.success) {
-                processedCount++;
-              }
-              
-            } catch (attachmentError) {
-              console.error(`Error processing attachment ${attachment.filename}:`, attachmentError);
-              results.push({
-                messageId: message.id,
-                subject: subject,
-                sender: sender,
-                attachment: attachment.filename,
-                processed: false,
-                error: attachmentError.message
-              });
-            }
+          // Extract email HTML content
+          const emailHTML = extractEmailHTML(msg.payload);
+          if (!emailHTML || emailHTML.trim().length === 0) {
+            console.log(`    No HTML content found in email`);
+            continue;
           }
-        } else {
-          console.log(`  No PDF attachments found`);
+          
+          // Convert HTML email to PDF and process
+          const processed = await processEmailContent(emailHTML, subject, sender, req.session.googleTokens);
+          
+          results.push({
+            messageId: message.id,
+            subject: subject,
+            sender: sender,
+            processed: processed.success,
+            vendor: processed.vendor,
+            amount: processed.amount,
+            receiptDate: processed.receiptDate,
+            filename: processed.filename,
+            googleDrive: processed.googleDrive,
+            error: processed.error
+          });
+          
+          if (processed.success) {
+            processedCount++;
+          }
+          
+        } catch (emailError) {
+          console.error(`Error processing email content:`, emailError);
+          results.push({
+            messageId: message.id,
+            subject: subject,
+            sender: sender,
+            processed: false,
+            error: emailError.message
+          });
         }
         
       } catch (messageError) {
@@ -896,85 +891,75 @@ function getHeader(headers, name) {
   return header ? header.value : null;
 }
 
-// Helper function to find PDF attachments
-async function findPDFAttachments(payload, gmail, messageId) {
-  const attachments = [];
+// Helper function to extract HTML content from email
+function extractEmailHTML(payload) {
+  let htmlContent = '';
   
-  async function searchParts(parts) {
+  function searchParts(parts) {
     if (!parts) return;
     
     for (const part of parts) {
-      if (part.filename && part.filename.toLowerCase().endsWith('.pdf')) {
-        if (part.body && part.body.attachmentId) {
-          try {
-            // Download attachment
-            const attachment = await gmail.users.messages.attachments.get({
-              userId: 'me',
-              messageId: messageId,
-              id: part.body.attachmentId
-            });
-            
-            // Convert base64url to buffer
-            const data = Buffer.from(attachment.data.data, 'base64url');
-            
-            attachments.push({
-              filename: part.filename,
-              data: data
-            });
-          } catch (error) {
-            console.error(`Error downloading attachment ${part.filename}:`, error);
-          }
-        }
+      // Look for HTML content
+      if (part.mimeType === 'text/html' && part.body && part.body.data) {
+        // Decode base64url content
+        const decoded = Buffer.from(part.body.data, 'base64url').toString('utf-8');
+        htmlContent += decoded;
       }
       
       // Recursively search nested parts
       if (part.parts) {
-        await searchParts(part.parts);
+        searchParts(part.parts);
       }
     }
   }
   
-  await searchParts(payload.parts || [payload]);
-  return attachments;
+  // Check main payload first
+  if (payload.mimeType === 'text/html' && payload.body && payload.body.data) {
+    htmlContent = Buffer.from(payload.body.data, 'base64url').toString('utf-8');
+  } else {
+    // Search through parts
+    searchParts(payload.parts || []);
+  }
+  
+  return htmlContent;
 }
 
-// Helper function to process PDF attachment (reuse existing logic)
-async function processPDFAttachment(fileBuffer, filename, tokens) {
+// Helper function to process email content (convert HTML to PDF and extract data)
+async function processEmailContent(htmlContent, subject, sender, tokens) {
+  let browser = null;
+  
   try {
-    console.log(`    Processing PDF: ${filename} (${fileBuffer.length} bytes)`);
+    console.log(`    Processing email HTML content (${htmlContent.length} characters)`);
     
-    // Parse PDF to extract text (reuse existing logic)
-    const pdfData = await pdf(fileBuffer, {
-      max: 5,
-      version: 'v1.10.100',
-      normalizeWhitespace: false,
-      verbosity: 0
-    });
-    
-    const text = pdfData.text;
+    // Extract text content for data extraction
+    const text = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     console.log(`    Extracted text length: ${text.length}`);
     
-    // Extract vendor, amount, and date (reuse existing functions)
+    // Extract vendor, amount, and date from email content
     let vendor = extractVendor(text);
     let amount = extractAmount(text);
     let receiptDate = extractDate(text);
+    
+    // Try to extract vendor from sender if not found
+    if (!vendor && sender) {
+      vendor = extractVendorFromSender(sender);
+    }
+    
+    // Try to extract vendor from subject if still not found
+    if (!vendor && subject) {
+      vendor = extractVendorFromSubject(subject);
+    }
     
     console.log(`    Initial extraction: vendor=${vendor}, amount=${amount}, date=${receiptDate}`);
     
     // Apply fallback logic if needed
     if (!vendor || !amount) {
-      const filenameInfo = parseFilename(filename);
-      
-      if (!vendor && !filenameInfo.vendor && text.length > 50) {
+      if (!vendor && text.length > 50) {
         const contextVendor = analyzeContext(text);
         if (contextVendor) {
-          filenameInfo.vendor = contextVendor;
+          vendor = contextVendor;
         }
       }
-      
-      vendor = vendor || filenameInfo.vendor;
-      amount = amount || filenameInfo.amount;
-      receiptDate = receiptDate || filenameInfo.date;
     }
     
     console.log(`    Final extraction: vendor=${vendor}, amount=${amount}, date=${receiptDate}`);
@@ -986,14 +971,68 @@ async function processPDFAttachment(fileBuffer, filename, tokens) {
       outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
     } else {
       const dateStr = receiptDate || new Date().toISOString().split('T')[0];
-      outputFilename = `Receipt ${dateStr}.pdf`;
+      outputFilename = `Email Receipt ${dateStr}.pdf`;
     }
+    
+    // Convert HTML to PDF using Puppeteer
+    console.log(`    Converting HTML to PDF...`);
+    browser = await puppeteer.launch({ 
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    
+    // Create a clean HTML document for the receipt
+    const cleanHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Email Receipt</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
+        .content { line-height: 1.4; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h2>Email Receipt</h2>
+        <p><strong>From:</strong> ${sender}</p>
+        <p><strong>Subject:</strong> ${subject}</p>
+        <p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>
+      </div>
+      <div class="content">
+        ${htmlContent}
+      </div>
+    </body>
+    </html>`;
+    
+    await page.setContent(cleanHTML, { waitUntil: 'networkidle0' });
+    
+    // Generate PDF
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      margin: {
+        top: '20px',
+        right: '20px',
+        bottom: '20px',
+        left: '20px'
+      },
+      printBackground: true
+    });
+    
+    await browser.close();
+    browser = null;
+    
+    console.log(`    Generated PDF: ${pdfBuffer.length} bytes`);
     
     // Upload to Google Drive
     let driveUpload = null;
     if (tokens) {
       try {
-        driveUpload = await uploadToGoogleDrive(fileBuffer, outputFilename, receiptDate, tokens);
+        driveUpload = await uploadToGoogleDrive(pdfBuffer, outputFilename, receiptDate, tokens);
         console.log(`    Google Drive upload: ${driveUpload.success ? 'SUCCESS' : 'FAILED'}`);
       } catch (driveError) {
         console.error(`    Google Drive upload error:`, driveError);
@@ -1012,12 +1051,81 @@ async function processPDFAttachment(fileBuffer, filename, tokens) {
     };
     
   } catch (error) {
-    console.error(`    PDF processing error:`, error);
+    console.error(`    Email processing error:`, error);
+    
+    // Clean up browser if still open
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (browserError) {
+        console.error('Error closing browser:', browserError);
+      }
+    }
+    
     return {
       success: false,
       error: error.message
     };
   }
+}
+
+// Helper function to extract vendor from email sender
+function extractVendorFromSender(sender) {
+  console.log(`    Extracting vendor from sender: ${sender}`);
+  
+  // Common email patterns
+  const patterns = [
+    // Amazon patterns
+    /amazon/i,
+    // Instacart patterns  
+    /instacart/i,
+    // Food delivery patterns
+    /doordash/i,
+    /uber/i,
+    /grubhub/i,
+    // Retail patterns
+    /target/i,
+    /walmart/i,
+    /starbucks/i,
+    /costco/i
+  ];
+  
+  for (const pattern of patterns) {
+    if (pattern.test(sender)) {
+      const match = sender.match(/([a-zA-Z]+)/);
+      if (match) {
+        const vendor = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+        console.log(`      Found vendor from sender: ${vendor}`);
+        return vendor;
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Helper function to extract vendor from email subject
+function extractVendorFromSubject(subject) {
+  console.log(`    Extracting vendor from subject: ${subject}`);
+  
+  const patterns = [
+    /Your ([A-Za-z]+) order/i,
+    /([A-Za-z]+) order confirmation/i,
+    /Thank you for shopping at ([A-Za-z]+)/i,
+    /Your ([A-Za-z]+) delivery/i,
+    /([A-Za-z]+) receipt/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = subject.match(pattern);
+    if (match && match[1]) {
+      const vendor = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+      console.log(`      Found vendor from subject: ${vendor}`);
+      return vendor;
+    }
+  }
+  
+  return null;
 }
 
 // Google Drive authentication routes

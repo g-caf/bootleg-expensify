@@ -330,7 +330,7 @@ class ExpenseGadget {
         
         // Show results section
         scanResults.style.display = 'block';
-        scanResults.innerHTML = '<div style="color: #6b7280;">🔍 Scanning your email for PDF receipts...</div>';
+        scanResults.innerHTML = '<div style="color: #6b7280;">🔍 Scanning your email for order confirmations...</div>';
         
         try {
             const response = await fetch('https://bootleg-expensify.onrender.com/scan-gmail', {
@@ -357,7 +357,7 @@ class ExpenseGadget {
             } else if (result.receiptsFound > 0) {
                 this.showStatus(`⚠️ Found ${result.receiptsFound} potential receipt emails, but couldn't process them`, 'warning');
             } else {
-                this.showStatus('📭 No recent receipt emails with PDF attachments found', 'warning');
+                this.showStatus('📭 No recent order confirmation emails found', 'warning');
             }
             
         } catch (error) {
@@ -375,7 +375,7 @@ class ExpenseGadget {
         const scanResults = document.getElementById('scanResults');
         
         if (result.results.length === 0) {
-            scanResults.innerHTML = '<div style="color: #6b7280;">No PDF receipts found in recent emails</div>';
+            scanResults.innerHTML = '<div style="color: #6b7280;">No order confirmation emails found in recent emails</div>';
             return;
         }
         
