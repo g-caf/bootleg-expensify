@@ -4,7 +4,6 @@ const cors = require('cors');
 const pdf = require('pdf-parse');
 const session = require('express-session');
 const { google } = require('googleapis');
-const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -924,10 +923,8 @@ function extractEmailHTML(payload) {
   return htmlContent;
 }
 
-// Helper function to process email content (convert HTML to PDF and extract data)
+// Helper function to process email content (convert to text receipt and extract data)
 async function processEmailContent(htmlContent, subject, sender, tokens) {
-  let browser = null;
-  
   try {
     console.log(`    Processing email HTML content (${htmlContent.length} characters)`);
     
@@ -968,65 +965,36 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
     let outputFilename;
     if (vendor && amount) {
       const dateStr = receiptDate || new Date().toISOString().split('T')[0];
-      outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
+      outputFilename = `${vendor} ${dateStr} $${amount}.txt`;
     } else {
       const dateStr = receiptDate || new Date().toISOString().split('T')[0];
-      outputFilename = `Email Receipt ${dateStr}.pdf`;
+      outputFilename = `Email Receipt ${dateStr}.txt`;
     }
     
-    // Convert HTML to PDF using Puppeteer
-    console.log(`    Converting HTML to PDF...`);
-    browser = await puppeteer.launch({ 
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    // Create a simple text-based PDF receipt
+    console.log(`    Creating text-based PDF receipt...`);
     
-    const page = await browser.newPage();
+    const receiptText = `
+EMAIL RECEIPT
+=============
+
+From: ${sender}
+Subject: ${subject}
+Generated: ${new Date().toLocaleDateString()}
+
+EXTRACTED DATA:
+Vendor: ${vendor || 'Not found'}
+Amount: $${amount || 'Not found'}
+Date: ${receiptDate || 'Not found'}
+
+EMAIL CONTENT:
+${text.substring(0, 1000)}${text.length > 1000 ? '...\n[Content truncated]' : ''}
+    `.trim();
     
-    // Create a clean HTML document for the receipt
-    const cleanHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Email Receipt</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .header { border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
-        .content { line-height: 1.4; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <h2>Email Receipt</h2>
-        <p><strong>From:</strong> ${sender}</p>
-        <p><strong>Subject:</strong> ${subject}</p>
-        <p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>
-      </div>
-      <div class="content">
-        ${htmlContent}
-      </div>
-    </body>
-    </html>`;
+    // Create a simple PDF buffer (for now, we'll store as text and convert later)
+    const pdfBuffer = Buffer.from(receiptText, 'utf-8');
     
-    await page.setContent(cleanHTML, { waitUntil: 'networkidle0' });
-    
-    // Generate PDF
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      margin: {
-        top: '20px',
-        right: '20px',
-        bottom: '20px',
-        left: '20px'
-      },
-      printBackground: true
-    });
-    
-    await browser.close();
-    browser = null;
-    
-    console.log(`    Generated PDF: ${pdfBuffer.length} bytes`);
+    console.log(`    Generated text receipt: ${pdfBuffer.length} bytes`);
     
     // Upload to Google Drive
     let driveUpload = null;
@@ -1052,15 +1020,6 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
     
   } catch (error) {
     console.error(`    Email processing error:`, error);
-    
-    // Clean up browser if still open
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (browserError) {
-        console.error('Error closing browser:', browserError);
-      }
-    }
     
     return {
       success: false,
@@ -1255,8 +1214,11 @@ async function uploadToGoogleDrive(fileBuffer, fileName, receiptDate, tokens) {
       parents: [monthFolderId]
     };
     
+    // Determine mime type based on file extension
+    const mimeType = fileName.endsWith('.txt') ? 'text/plain' : 'application/pdf';
+    
     const media = {
-      mimeType: 'application/pdf',
+      mimeType: mimeType,
       body: require('stream').Readable.from(fileBuffer)
     };
     
