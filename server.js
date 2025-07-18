@@ -4,6 +4,7 @@ const cors = require('cors');
 const pdf = require('pdf-parse');
 const session = require('express-session');
 const { google } = require('googleapis');
+const PDFDocument = require('pdfkit');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -935,7 +936,7 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
     // Extract vendor, amount, and date from email content
     let vendor = extractVendor(text);
     let amount = extractAmount(text);
-    let receiptDate = extractDate(text);
+    let receiptDate = extractEmailDate(text, subject, sender);
     
     // Try to extract vendor from sender if not found
     if (!vendor && sender) {
@@ -965,36 +966,25 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
     let outputFilename;
     if (vendor && amount) {
       const dateStr = receiptDate || new Date().toISOString().split('T')[0];
-      outputFilename = `${vendor} ${dateStr} $${amount}.txt`;
+      outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
     } else {
       const dateStr = receiptDate || new Date().toISOString().split('T')[0];
-      outputFilename = `Email Receipt ${dateStr}.txt`;
+      outputFilename = `Email Receipt ${dateStr}.pdf`;
     }
     
-    // Create a simple text-based PDF receipt
-    console.log(`    Creating text-based PDF receipt...`);
+    // Create a proper PDF receipt using PDFKit
+    console.log(`    Creating PDF receipt...`);
     
-    const receiptText = `
-EMAIL RECEIPT
-=============
-
-From: ${sender}
-Subject: ${subject}
-Generated: ${new Date().toLocaleDateString()}
-
-EXTRACTED DATA:
-Vendor: ${vendor || 'Not found'}
-Amount: $${amount || 'Not found'}
-Date: ${receiptDate || 'Not found'}
-
-EMAIL CONTENT:
-${text.substring(0, 1000)}${text.length > 1000 ? '...\n[Content truncated]' : ''}
-    `.trim();
+    const pdfBuffer = await createEmailReceiptPDF({
+      sender,
+      subject,
+      vendor: vendor || 'Not found',
+      amount: amount || 'Not found',
+      receiptDate: receiptDate || 'Not found',
+      emailContent: text.substring(0, 1500) // Include more content
+    });
     
-    // Create a simple PDF buffer (for now, we'll store as text and convert later)
-    const pdfBuffer = Buffer.from(receiptText, 'utf-8');
-    
-    console.log(`    Generated text receipt: ${pdfBuffer.length} bytes`);
+    console.log(`    Generated PDF: ${pdfBuffer.length} bytes`);
     
     // Upload to Google Drive
     let driveUpload = null;
@@ -1085,6 +1075,241 @@ function extractVendorFromSubject(subject) {
   }
   
   return null;
+}
+
+// Enhanced date extraction specifically for emails
+function extractEmailDate(text, subject, sender) {
+  console.log('  Extracting date from email...');
+  console.log(`    Subject: ${subject}`);
+  console.log(`    Sender: ${sender}`);
+  
+  const dates = [];
+  
+  // Email-specific date patterns (more common in emails)
+  const emailDatePatterns = [
+    // Order placed/shipped patterns
+    /(?:order placed|placed on|shipped on|delivered on|ordered on)\s*:?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/gi,
+    /(?:order placed|placed on|shipped on|delivered on|ordered on)\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{4})/gi,
+    /(?:order placed|placed on|shipped on|delivered on|ordered on)\s*:?\s*(\d{4}-\d{1,2}-\d{1,2})/gi,
+    
+    // Date in subject line
+    /(\d{1,2}\/\d{1,2}\/\d{4})/g,
+    /(\d{4}-\d{1,2}-\d{1,2})/g,
+    
+    // Common email date formats
+    /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})/gi,
+    /((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4})/gi,
+    
+    // Date with ordinals (common in emails)
+    /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th),?\s+\d{4})/gi,
+    
+    // Delivery date patterns
+    /delivery date[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4})/gi,
+    /delivery date[:\s]+(\d{1,2}\/\d{1,2}\/\d{4})/gi,
+    
+    // Expected delivery patterns
+    /expected[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4})/gi,
+    /arriving[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4})/gi
+  ];
+  
+  // Check subject line first (often has the most relevant date)
+  if (subject) {
+    console.log(`    Checking subject for dates...`);
+    for (const pattern of emailDatePatterns) {
+      let match;
+      while ((match = pattern.exec(subject)) !== null) {
+        const dateStr = match[1];
+        console.log(`      Found date in subject: "${dateStr}"`);
+        const date = parseEmailDate(dateStr);
+        if (date) {
+          dates.push({ date, source: 'subject', confidence: 10 });
+        }
+      }
+    }
+  }
+  
+  // Check email content
+  console.log(`    Checking email content for dates...`);
+  for (const pattern of emailDatePatterns) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const dateStr = match[1];
+      console.log(`      Found date in content: "${dateStr}"`);
+      const date = parseEmailDate(dateStr);
+      if (date) {
+        // Give higher confidence to dates near order/delivery keywords
+        const beforeText = text.substring(Math.max(0, match.index - 50), match.index).toLowerCase();
+        const afterText = text.substring(match.index, Math.min(text.length, match.index + 50)).toLowerCase();
+        const contextText = beforeText + afterText;
+        
+        let confidence = 5;
+        if (contextText.includes('order') || contextText.includes('placed') || contextText.includes('shipped')) {
+          confidence = 8;
+        }
+        if (contextText.includes('delivery') || contextText.includes('delivered')) {
+          confidence = 9;
+        }
+        
+        dates.push({ date, source: 'content', confidence });
+      }
+    }
+  }
+  
+  console.log(`    Found ${dates.length} potential dates`);
+  dates.forEach((item, i) => {
+    console.log(`      ${i + 1}. ${item.date.toISOString().split('T')[0]} (${item.source}, confidence: ${item.confidence})`);
+  });
+  
+  if (dates.length === 0) {
+    console.log('    No dates found, falling back to standard extraction');
+    return extractDate(text);
+  }
+  
+  // Sort by confidence (highest first), then by recency
+  dates.sort((a, b) => {
+    if (a.confidence !== b.confidence) {
+      return b.confidence - a.confidence;
+    }
+    return b.date.getTime() - a.date.getTime();
+  });
+  
+  const bestDate = dates[0].date;
+  const formattedDate = bestDate.toISOString().split('T')[0];
+  console.log(`    Best date: ${formattedDate} (${dates[0].source}, confidence: ${dates[0].confidence})`);
+  
+  return formattedDate;
+}
+
+// Helper to parse various email date formats
+function parseEmailDate(dateStr) {
+  try {
+    // Remove ordinal suffixes
+    const cleanDateStr = dateStr.replace(/(\d{1,2})(st|nd|rd|th)/g, '$1');
+    
+    const date = new Date(cleanDateStr);
+    
+    // Check if date is valid and not in the future (with 1 day tolerance)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (!isNaN(date.getTime()) && date <= tomorrow) {
+      return date;
+    }
+  } catch (error) {
+    console.log(`      Error parsing date "${dateStr}": ${error.message}`);
+  }
+  
+  return null;
+}
+
+// Create a professional PDF receipt from email content
+async function createEmailReceiptPDF(data) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ 
+        size: 'A4',
+        margin: 50 
+      });
+      
+      const chunks = [];
+      
+      // Collect PDF data
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+      
+      // Header
+      doc.fontSize(20)
+         .fillColor('#2563eb')
+         .text('EMAIL RECEIPT', 50, 50, { align: 'center' });
+      
+      doc.moveTo(50, 80)
+         .lineTo(545, 80)
+         .strokeColor('#e5e7eb')
+         .stroke();
+      
+      let y = 110;
+      
+      // Email Info Section
+      doc.fontSize(14)
+         .fillColor('#374151')
+         .text('Email Information', 50, y);
+      
+      y += 30;
+      doc.fontSize(10)
+         .fillColor('#6b7280');
+      
+      doc.text(`From: ${data.sender}`, 50, y);
+      y += 15;
+      doc.text(`Subject: ${data.subject}`, 50, y);
+      y += 15;
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 50, y);
+      
+      y += 40;
+      
+      // Extracted Data Section
+      doc.fontSize(14)
+         .fillColor('#374151')
+         .text('Extracted Receipt Data', 50, y);
+      
+      y += 30;
+      
+      // Create a nice table-like layout
+      const dataRows = [
+        ['Vendor:', data.vendor],
+        ['Amount:', data.amount.startsWith('$') ? data.amount : `$${data.amount}`],
+        ['Date:', data.receiptDate]
+      ];
+      
+      doc.fontSize(11);
+      dataRows.forEach(row => {
+        doc.fillColor('#6b7280')
+           .text(row[0], 50, y, { width: 100 });
+        
+        doc.fillColor('#374151')
+           .font('Helvetica-Bold')
+           .text(row[1], 150, y);
+        
+        doc.font('Helvetica'); // Reset font
+        y += 20;
+      });
+      
+      y += 30;
+      
+      // Email Content Section
+      doc.fontSize(14)
+         .fillColor('#374151')
+         .text('Email Content', 50, y);
+      
+      y += 25;
+      
+      // Content box
+      doc.rect(50, y, 495, 200)
+         .strokeColor('#e5e7eb')
+         .fillColor('#f9fafb')
+         .fillAndStroke();
+      
+      y += 15;
+      
+      doc.fontSize(9)
+         .fillColor('#4b5563')
+         .text(data.emailContent, 60, y, { 
+           width: 475, 
+           height: 170,
+           ellipsis: true
+         });
+      
+      // Footer
+      doc.fontSize(8)
+         .fillColor('#9ca3af')
+         .text('Generated by Expense Gadget', 50, 750, { align: 'center' });
+      
+      doc.end();
+      
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 // Google Drive authentication routes
@@ -1214,11 +1439,8 @@ async function uploadToGoogleDrive(fileBuffer, fileName, receiptDate, tokens) {
       parents: [monthFolderId]
     };
     
-    // Determine mime type based on file extension
-    const mimeType = fileName.endsWith('.txt') ? 'text/plain' : 'application/pdf';
-    
     const media = {
-      mimeType: mimeType,
+      mimeType: 'application/pdf',
       body: require('stream').Readable.from(fileBuffer)
     };
     

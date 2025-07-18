@@ -13,7 +13,7 @@
     "cors": "^2.8.5",
     "express-session": "^1.17.3",
     "googleapis": "^144.0.0",
-    "jspdf": "^2.5.1"
+    "pdfkit": "^0.14.0"
   },
   "engines": {
     "node": ">=16"
