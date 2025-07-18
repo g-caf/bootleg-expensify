@@ -1943,6 +1943,17 @@ app.get('/auth/status', (req, res) => {
   res.json({ authenticated: isAuthenticated });
 });
 
+// Token endpoint for extension
+app.get('/auth/token', (req, res) => {
+  if (req.session.googleTokens) {
+    res.json({
+      access_token: req.session.googleTokens.access_token
+    });
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
+});
+
 // Create Google Drive folder and upload file
 async function uploadToGoogleDrive(fileBuffer, fileName, receiptDate, tokens) {
   try {

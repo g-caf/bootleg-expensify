@@ -7,46 +7,49 @@ class GmailClient {
 
     async authenticate() {
         try {
-            // Use Chrome extension identity API for OAuth
-            const redirectURL = chrome.identity.getRedirectURL();
-            const authURL = `https://accounts.google.com/oauth/authorize?` +
-                `client_id=YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com&` +
-                `response_type=token&` +
-                `redirect_uri=${encodeURIComponent(redirectURL)}&` +
-                `scope=${encodeURIComponent('https://www.googleapis.com/auth/gmail.readonly')}`;
-
-            const responseUrl = await new Promise((resolve, reject) => {
-                chrome.identity.launchWebAuthFlow(
-                    {
-                        url: authURL,
-                        interactive: true
-                    },
-                    (responseUrl) => {
-                        if (chrome.runtime.lastError) {
-                            reject(new Error(chrome.runtime.lastError.message));
-                        } else {
-                            resolve(responseUrl);
-                        }
-                    }
-                );
-            });
-
-            // Extract access token from response URL
-            const urlParams = new URLSearchParams(responseUrl.split('#')[1]);
-            this.accessToken = urlParams.get('access_token');
+            // Use the existing server-side Google OAuth flow
+            // This will open the same auth flow that's used for Google Drive
+            const authUrl = 'https://bootleg-expensify.onrender.com/auth/google';
+            window.open(authUrl, '_blank', 'width=500,height=600');
             
-            if (this.accessToken) {
-                this.isAuthenticated = true;
-                // Store token for later use
-                await chrome.storage.local.set({ gmailAccessToken: this.accessToken });
-                return true;
-            } else {
-                throw new Error('No access token received');
-            }
+            // Check for authentication status periodically
+            return new Promise((resolve) => {
+                const checkInterval = setInterval(async () => {
+                    const token = await this.getTokenFromServer();
+                    if (token) {
+                        this.accessToken = token;
+                        this.isAuthenticated = true;
+                        await chrome.storage.local.set({ gmailAccessToken: token });
+                        clearInterval(checkInterval);
+                        resolve(true);
+                    }
+                }, 2000);
+
+                // Stop checking after 2 minutes
+                setTimeout(() => {
+                    clearInterval(checkInterval);
+                    resolve(false);
+                }, 120000);
+            });
         } catch (error) {
             console.error('Gmail authentication error:', error);
             return false;
         }
+    }
+
+    async getTokenFromServer() {
+        try {
+            const response = await fetch('https://bootleg-expensify.onrender.com/auth/token', {
+                credentials: 'include'
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return data.access_token;
+            }
+        } catch (error) {
+            // Ignore errors, we're just checking
+        }
+        return null;
     }
 
     async checkStoredAuth() {
