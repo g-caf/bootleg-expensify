@@ -1187,8 +1187,7 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
       vendor: vendor || 'Not found',
       amount: amount || 'Not found',
       receiptDate: receiptDate || 'Not found',
-      emailContent: text.substring(0, 1500), // Include more content
-      htmlContent: htmlContent // Pass the raw HTML for better rendering
+      emailContent: text.substring(0, 1500) // Include more content
     });
     
     console.log(`    Generated PDF: ${pdfBuffer.length} bytes`);
@@ -1483,112 +1482,151 @@ async function createEmailReceiptPDF(data) {
   try {
     console.log(`    Generating HTML for PDF conversion...`);
     
-    // Clean up and prepare HTML content
-    let emailHtml = '';
-    if (data.htmlContent) {
-      // Use the raw email HTML content for a more natural look
-      emailHtml = data.htmlContent
-        // Remove scripts and dangerous elements
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, '')
-        .replace(/<object[^>]*>[\s\S]*?<\/object>/gi, '')
-        .replace(/<embed[^>]*>/gi, '')
-        // Fix relative URLs (basic cleanup)
-        .replace(/src="\//g, 'src="https://example.com/')
-        .replace(/href="\//g, 'href="https://example.com/');
-    }
+    // Escape data values to prevent HTML injection
+    const escapeHtml = (str) => {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#x27;');
+    };
     
-    // Create HTML that looks like a traditional email print
+    // Create beautiful HTML for the receipt with proper template literal syntax
     const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Email Receipt - ${data.subject}</title>
+  <title>Email Receipt</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 40px;
       background: white;
       color: #374151;
       line-height: 1.5;
     }
-    .email-header {
-      border-bottom: 1px solid #e2e8f0;
-      padding-bottom: 15px;
-      margin-bottom: 20px;
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      border-bottom: 3px solid #2563eb;
+      padding-bottom: 20px;
     }
-    .email-meta {
-      font-size: 12px;
-      color: #6b7280;
-      margin-bottom: 8px;
+    .header h1 {
+      color: #2563eb;
+      font-size: 28px;
+      margin: 0;
+      font-weight: 600;
     }
-    .email-subject {
+    .section {
+      margin-bottom: 30px;
+    }
+    .section-title {
       font-size: 18px;
       font-weight: 600;
       color: #1f2937;
-      margin: 5px 0;
+      margin-bottom: 15px;
+      border-left: 4px solid #2563eb;
+      padding-left: 15px;
     }
-    .email-body {
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    .email-body table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .email-body td {
-      padding: 8px;
-      vertical-align: top;
-    }
-    .email-body img {
-      max-width: 100%;
-      height: auto;
-    }
-    .receipt-info {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 15px;
+    .info-grid {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 10px;
       margin-bottom: 20px;
+    }
+    .info-label {
+      color: #6b7280;
+      font-weight: 500;
+    }
+    .info-value {
+      color: #374151;
+      font-weight: 600;
+    }
+    .data-grid {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 15px;
+      background: #f8fafc;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    .data-label {
+      color: #6b7280;
+      font-weight: 500;
+    }
+    .data-value {
+      color: #1f2937;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .content-box {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 20px;
+      font-size: 12px;
+      color: #4b5563;
+      max-height: 200px;
+      overflow: hidden;
+      line-height: 1.4;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      color: #9ca3af;
       font-size: 12px;
     }
-    .receipt-info strong {
-      color: #1f2937;
-    }
-    /* Email-specific styles */
-    .email-body {
-      /* Common email client styles */
-      font-family: Arial, sans-serif;
-    }
-    .email-body .outlook-container {
-      width: 100%;
-    }
-    .email-body .gmail-container {
-      width: 100%;
-    }
-    /* Override any problematic styles */
-    .email-body * {
-      max-width: 100% !important;
-    }
-    .email-body table {
-      table-layout: fixed;
+    .highlight {
+      background: #dbeafe;
+      padding: 2px 6px;
+      border-radius: 4px;
     }
   </style>
 </head>
 <body>
-  <div class="email-header">
-    <div class="email-meta">From: ${data.sender}</div>
-    <div class="email-meta">Date: ${new Date().toLocaleDateString()}</div>
-    <div class="email-subject">${data.subject}</div>
+  <div class="header">
+    <h1>📧 EMAIL RECEIPT</h1>
   </div>
   
-  <div class="receipt-info">
-    <strong>Receipt Information:</strong> ${data.vendor} • ${data.amount} • ${data.receiptDate}
+  <div class="section">
+    <div class="section-title">Email Information</div>
+    <div class="info-grid">
+      <div class="info-label">From:</div>
+      <div class="info-value">${escapeHtml(data.sender)}</div>
+      <div class="info-label">Subject:</div>
+      <div class="info-value">${escapeHtml(data.subject)}</div>
+      <div class="info-label">Generated:</div>
+      <div class="info-value">${new Date().toLocaleDateString()}</div>
+    </div>
   </div>
   
-  <div class="email-body">
-    ${emailHtml || data.emailContent.replace(/\n/g, '<br>')}
+  <div class="section">
+    <div class="section-title">Extracted Receipt Data</div>
+    <div class="data-grid">
+      <div class="data-label">Vendor:</div>
+      <div class="data-value"><span class="highlight">${escapeHtml(data.vendor)}</span></div>
+      <div class="data-label">Amount:</div>
+      <div class="data-value"><span class="highlight">${escapeHtml(data.amount.startsWith('$') ? data.amount : '$' + data.amount)}</span></div>
+      <div class="data-label">Date:</div>
+      <div class="data-value"><span class="highlight">${escapeHtml(data.receiptDate)}</span></div>
+    </div>
+  </div>
+  
+  <div class="section">
+    <div class="section-title">Email Content Preview</div>
+    <div class="content-box">
+      ${data.emailContent.replace(/\n/g, '<br>').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').substring(0, 1500)}
+      ${data.emailContent.length > 1500 ? '<br><br><em>[Content truncated for display]</em>' : ''}
+    </div>
+  </div>
+  
+  <div class="footer">
+    Generated by Expense Gadget • ${new Date().toLocaleDateString()}
   </div>
 </body>
 </html>`;
