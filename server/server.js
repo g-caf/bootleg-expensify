@@ -4,7 +4,6 @@ const cors = require('cors');
 const pdf = require('pdf-parse');
 const session = require('express-session');
 const { google } = require('googleapis');
-const PDFDocument = require('pdfkit');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -972,10 +971,10 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
       outputFilename = `Email Receipt ${dateStr}.pdf`;
     }
     
-    // Create a proper PDF receipt using PDFKit
-    console.log(`    Creating PDF receipt...`);
+    // Create a proper PDF receipt using Browserless.io
+    console.log(`    Creating PDF receipt with Browserless.io...`);
     
-    const pdfBuffer = await createEmailReceiptPDF({
+    const pdfBuffer = await createEmailReceiptPDFViaBrowserless({
       sender,
       subject,
       vendor: vendor || 'Not found',
@@ -1202,114 +1201,207 @@ function parseEmailDate(dateStr) {
   return null;
 }
 
-// Create a professional PDF receipt from email content
-async function createEmailReceiptPDF(data) {
-  return new Promise((resolve, reject) => {
-    try {
-      const doc = new PDFDocument({ 
-        size: 'A4',
-        margin: 50 
-      });
+// Create a professional PDF receipt using Browserless.io
+async function createEmailReceiptPDFViaBrowserless(data) {
+  try {
+    console.log(`    Generating HTML for PDF conversion...`);
+    
+    // Create beautiful HTML for the receipt
+    const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Email Receipt</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          margin: 0;
+          padding: 40px;
+          background: white;
+          color: #374151;
+          line-height: 1.5;
+        }
+        .header {
+          text-align: center;
+          margin-bottom: 40px;
+          border-bottom: 3px solid #2563eb;
+          padding-bottom: 20px;
+        }
+        .header h1 {
+          color: #2563eb;
+          font-size: 28px;
+          margin: 0;
+          font-weight: 600;
+        }
+        .section {
+          margin-bottom: 30px;
+        }
+        .section-title {
+          font-size: 18px;
+          font-weight: 600;
+          color: #1f2937;
+          margin-bottom: 15px;
+          border-left: 4px solid #2563eb;
+          padding-left: 15px;
+        }
+        .info-grid {
+          display: grid;
+          grid-template-columns: 120px 1fr;
+          gap: 10px;
+          margin-bottom: 20px;
+        }
+        .info-label {
+          color: #6b7280;
+          font-weight: 500;
+        }
+        .info-value {
+          color: #374151;
+          font-weight: 600;
+        }
+        .data-grid {
+          display: grid;
+          grid-template-columns: 100px 1fr;
+          gap: 15px;
+          background: #f8fafc;
+          padding: 20px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+        }
+        .data-label {
+          color: #6b7280;
+          font-weight: 500;
+        }
+        .data-value {
+          color: #1f2937;
+          font-weight: 700;
+          font-size: 16px;
+        }
+        .content-box {
+          background: #f9fafb;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          padding: 20px;
+          font-size: 12px;
+          color: #4b5563;
+          max-height: 200px;
+          overflow: hidden;
+          line-height: 1.4;
+        }
+        .footer {
+          text-align: center;
+          margin-top: 40px;
+          padding-top: 20px;
+          border-top: 1px solid #e5e7eb;
+          color: #9ca3af;
+          font-size: 12px;
+        }
+        .highlight {
+          background: #dbeafe;
+          padding: 2px 6px;
+          border-radius: 4px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>📧 EMAIL RECEIPT</h1>
+      </div>
       
-      const chunks = [];
+      <div class="section">
+        <div class="section-title">Email Information</div>
+        <div class="info-grid">
+          <div class="info-label">From:</div>
+          <div class="info-value">${data.sender}</div>
+          <div class="info-label">Subject:</div>
+          <div class="info-value">${data.subject}</div>
+          <div class="info-label">Generated:</div>
+          <div class="info-value">${new Date().toLocaleDateString()}</div>
+        </div>
+      </div>
       
-      // Collect PDF data
-      doc.on('data', chunk => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
+      <div class="section">
+        <div class="section-title">Extracted Receipt Data</div>
+        <div class="data-grid">
+          <div class="data-label">Vendor:</div>
+          <div class="data-value"><span class="highlight">${data.vendor}</span></div>
+          <div class="data-label">Amount:</div>
+          <div class="data-value"><span class="highlight">${data.amount.startsWith('$') ? data.amount : '$' + data.amount}</span></div>
+          <div class="data-label">Date:</div>
+          <div class="data-value"><span class="highlight">${data.receiptDate}</span></div>
+        </div>
+      </div>
       
-      // Header
-      doc.fontSize(20)
-         .fillColor('#2563eb')
-         .text('EMAIL RECEIPT', 50, 50, { align: 'center' });
+      <div class="section">
+        <div class="section-title">Email Content Preview</div>
+        <div class="content-box">
+          ${data.emailContent.replace(/\n/g, '<br>').substring(0, 1500)}
+          ${data.emailContent.length > 1500 ? '<br><br><em>[Content truncated for display]</em>' : ''}
+        </div>
+      </div>
       
-      doc.moveTo(50, 80)
-         .lineTo(545, 80)
-         .strokeColor('#e5e7eb')
-         .stroke();
-      
-      let y = 110;
-      
-      // Email Info Section
-      doc.fontSize(14)
-         .fillColor('#374151')
-         .text('Email Information', 50, y);
-      
-      y += 30;
-      doc.fontSize(10)
-         .fillColor('#6b7280');
-      
-      doc.text(`From: ${data.sender}`, 50, y);
-      y += 15;
-      doc.text(`Subject: ${data.subject}`, 50, y);
-      y += 15;
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 50, y);
-      
-      y += 40;
-      
-      // Extracted Data Section
-      doc.fontSize(14)
-         .fillColor('#374151')
-         .text('Extracted Receipt Data', 50, y);
-      
-      y += 30;
-      
-      // Create a nice table-like layout
-      const dataRows = [
-        ['Vendor:', data.vendor],
-        ['Amount:', data.amount.startsWith('$') ? data.amount : `$${data.amount}`],
-        ['Date:', data.receiptDate]
-      ];
-      
-      doc.fontSize(11);
-      dataRows.forEach(row => {
-        doc.fillColor('#6b7280')
-           .text(row[0], 50, y, { width: 100 });
-        
-        doc.fillColor('#374151')
-           .font('Helvetica-Bold')
-           .text(row[1], 150, y);
-        
-        doc.font('Helvetica'); // Reset font
-        y += 20;
-      });
-      
-      y += 30;
-      
-      // Email Content Section
-      doc.fontSize(14)
-         .fillColor('#374151')
-         .text('Email Content', 50, y);
-      
-      y += 25;
-      
-      // Content box
-      doc.rect(50, y, 495, 200)
-         .strokeColor('#e5e7eb')
-         .fillColor('#f9fafb')
-         .fillAndStroke();
-      
-      y += 15;
-      
-      doc.fontSize(9)
-         .fillColor('#4b5563')
-         .text(data.emailContent, 60, y, { 
-           width: 475, 
-           height: 170,
-           ellipsis: true
-         });
-      
-      // Footer
-      doc.fontSize(8)
-         .fillColor('#9ca3af')
-         .text('Generated by Expense Gadget', 50, 750, { align: 'center' });
-      
-      doc.end();
-      
-    } catch (error) {
-      reject(error);
+      <div class="footer">
+        Generated by Expense Gadget • ${new Date().toLocaleDateString()}
+      </div>
+    </body>
+    </html>`;
+    
+    console.log(`    Sending HTML to Browserless.io for PDF conversion...`);
+    
+    // Call Browserless.io API
+    const browserlessResponse = await fetch('https://chrome.browserless.io/pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.BROWSERLESS_TOKEN || 'YOUR_BROWSERLESS_TOKEN'}`
+      },
+      body: JSON.stringify({
+        html: html,
+        options: {
+          format: 'A4',
+          margin: {
+            top: '20px',
+            right: '20px',
+            bottom: '20px',
+            left: '20px'
+          },
+          printBackground: true,
+          preferCSSPageSize: true
+        }
+      })
+    });
+    
+    if (!browserlessResponse.ok) {
+      throw new Error(`Browserless.io API error: ${browserlessResponse.status} ${browserlessResponse.statusText}`);
     }
-  });
+    
+    const pdfBuffer = await browserlessResponse.buffer();
+    console.log(`    PDF generated successfully: ${pdfBuffer.length} bytes`);
+    
+    return pdfBuffer;
+    
+  } catch (error) {
+    console.error('Error creating PDF with Browserless.io:', error);
+    
+    // Fallback to simple text format if PDF generation fails
+    console.log('    Falling back to text format...');
+    const textContent = `EMAIL RECEIPT
+=============
+
+From: ${data.sender}
+Subject: ${data.subject}
+Generated: ${new Date().toLocaleDateString()}
+
+EXTRACTED DATA:
+Vendor: ${data.vendor}
+Amount: ${data.amount}
+Date: ${data.receiptDate}
+
+EMAIL CONTENT:
+${data.emailContent}`;
+    
+    return Buffer.from(textContent, 'utf-8');
+  }
 }
 
 // Google Drive authentication routes
