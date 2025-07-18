@@ -938,8 +938,8 @@ app.post('/scan-gmail', async (req, res) => {
     // Focused search for RECEIPTS (not delivery notifications) from Big 3 platforms
     const query = [
       '(',
-      // Amazon order confirmations (NOT deliveries)
-      'from:amazon.com (subject:"Ordered:" OR subject:"Order Confirmation" OR subject:"Your Amazon.com order")',
+      // Amazon order confirmations (NOT deliveries) - more specific patterns
+      'from:amazon.com (subject:"Your order of" OR subject:"Order Confirmation" OR subject:"Your Amazon.com order of")',
       ') OR (',
       // DoorDash receipts
       'from:doordash.com (subject:receipt OR subject:"Order confirmed" OR subject:"Your DoorDash receipt")',
@@ -947,12 +947,14 @@ app.post('/scan-gmail', async (req, res) => {
       // Instacart receipts  
       'from:instacart.com (subject:receipt OR subject:"Your Instacart order receipt" OR subject:"Order receipt")',
       ')',
-      // Exclude delivery/shipping notifications
-      '-subject:Shipped: -subject:Delivered: -subject:"Out for delivery" -subject:"Your package"',
+      // Exclude delivery/shipping notifications - expanded
+      '-subject:Shipped -subject:Delivered -subject:"Out for delivery" -subject:"Your package" -subject:"Package update" -subject:"Tracking"',
       // Exclude refunds and cancellations
       '-subject:refund -subject:cancelled -subject:canceled -subject:"order cancelled"',
-      // Last 30 days
-      'newer_than:30d'
+      // Exclude Amazon promotional emails
+      '-subject:"deals" -subject:"Prime" -subject:"recommendation" -subject:"Save" -subject:"Deal"',
+      // Last 14 days instead of 30 for less volume
+      'newer_than:14d'
     ].join(' ');
     
     console.log('Gmail search query:', query);

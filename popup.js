@@ -386,7 +386,7 @@ class ExpenseGadget {
             const statusClass = item.processed ? 'scan-result-success' : 'scan-result-error';
             
             html += `<div class="scan-result-item">`;
-            html += `<div class="${statusClass}">${status} ${item.attachment || 'Unknown attachment'}</div>`;
+            html += `<div class="${statusClass}">${status} ${item.filename || 'Email receipt'}</div>`;
             
             if (item.processed) {
                 html += `<div style="font-size: 11px; color: #6b7280; margin-left: 16px;">`;
