@@ -10,6 +10,7 @@ class ExpenseGadget {
         this.isProcessing = false;
         this.currentTab = 'scan';
         this.searchDebounceTimer = null;
+        this.gmailClient = new GmailClient();
         this.init();
     }
 
@@ -17,6 +18,7 @@ class ExpenseGadget {
         this.setupEventListeners();
         this.setupTabs();
         await this.checkGoogleDriveStatus();
+        await this.checkGmailAuth();
     }
 
     setupEventListeners() {
@@ -321,12 +323,48 @@ class ExpenseGadget {
         }
     }
 
-    handleDriveCheckboxClick() {
+    async handleDriveCheckboxClick() {
         const checkbox = document.getElementById('driveCheckbox');
         const isConnected = checkbox.classList.contains('connected');
         
         if (!isConnected) {
-            this.connectGoogleDrive();
+            // Try Gmail auth first, then Google Drive
+            const gmailAuth = await this.authenticateGmail();
+            if (gmailAuth) {
+                this.connectGoogleDrive();
+            }
+        }
+    }
+
+    async checkGmailAuth() {
+        const isAuthenticated = await this.gmailClient.checkStoredAuth();
+        this.updateGmailAuthStatus(isAuthenticated);
+        return isAuthenticated;
+    }
+
+    async authenticateGmail() {
+        try {
+            const success = await this.gmailClient.authenticate();
+            this.updateGmailAuthStatus(success);
+            if (success) {
+                this.showStatus('✅ Gmail access granted!', 'success');
+            }
+            return success;
+        } catch (error) {
+            console.error('Gmail authentication error:', error);
+            this.showStatus('❌ Gmail authentication failed', 'error');
+            return false;
+        }
+    }
+
+    updateGmailAuthStatus(isAuthenticated) {
+        // Enable search functionality if Gmail is authenticated
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.disabled = !isAuthenticated;
+            searchInput.placeholder = isAuthenticated 
+                ? 'Search your email for receipts...'
+                : 'Connect to Google to enable search';
         }
     }
 
@@ -473,24 +511,17 @@ class ExpenseGadget {
         
         const searchResults = document.getElementById('searchResults');
         
+        // Check if Gmail is authenticated
+        if (!this.gmailClient.isAuthenticated) {
+            searchResults.innerHTML = '<div style="color: #dc2626; text-align: center; padding: 20px;">❌ Please connect to Google first</div>';
+            return;
+        }
+        
         // Show loading state
         searchResults.innerHTML = '<div style="color: #6b7280; text-align: center; padding: 20px;">🔍 Searching...</div>';
         
         try {
-            const response = await fetch('https://bootleg-expensify.onrender.com/search-emails', {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ query })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
-            }
-            
-            const results = await response.json();
+            const results = await this.gmailClient.searchEmails(query);
             console.log('Search results:', results);
             
             this.displaySearchResults(results);
@@ -543,29 +574,11 @@ class ExpenseGadget {
         buttonElement.textContent = 'Converting...';
         
         try {
-            const response = await fetch('https://bootleg-expensify.onrender.com/convert-email', {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ emailId })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
-            }
-            
-            const result = await response.json();
-            console.log('Convert result:', result);
-            
-            if (result.success) {
-                buttonElement.textContent = '✅ Converted';
-                buttonElement.style.background = '#22c55e';
-                this.showStatus(`✅ Successfully converted email to PDF: ${result.filename}`, 'success');
-            } else {
-                throw new Error(result.error || 'Conversion failed');
-            }
+            // For now, show that we need to implement server-side email processing
+            // We'll need to add a new endpoint that takes an email ID and processes it
+            this.showStatus('⚠️ Email conversion coming soon - server endpoint needed', 'warning');
+            buttonElement.textContent = '⏳ Soon';
+            buttonElement.style.background = '#f59e0b';
             
         } catch (error) {
             console.error('Convert error:', error);
@@ -579,7 +592,7 @@ class ExpenseGadget {
             buttonElement.disabled = false;
             if (buttonElement.textContent === '❌ Failed') {
                 buttonElement.textContent = 'Convert to PDF';
-                buttonElement.style.background = '#ff5722';
+                buttonElement.style.background = '#f44e40';
             }
         }, 3000);
     }

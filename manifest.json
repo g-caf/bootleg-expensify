@@ -4,11 +4,13 @@
   "version": "1.0",
   "description": "Automatically process and organize expense receipts",
   "permissions": [
-    "storage"
+    "storage",
+    "identity"
   ],
   "host_permissions": [
     "https://bootleg-expensify.onrender.com/*",
-    "https://*.onrender.com/*"
+    "https://*.onrender.com/*",
+    "https://www.googleapis.com/*"
   ],
   "commands": {
     "_execute_action": {
@@ -37,5 +39,9 @@
       "resources": ["pdf.min.js", "pdf.worker.min.js"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "oauth2": {
+    "client_id": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/gmail.readonly"]
+  }
 }
