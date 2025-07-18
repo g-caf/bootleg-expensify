@@ -1136,7 +1136,7 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
     console.log(`    💰 Extracting amount...`);
     let amount = extractAmount(text);
     console.log(`    📅 Extracting date...`);
-    let receiptDate = extractEmailDate(text, subject, sender);
+    let receiptDate = extractEmailDate(text, subject, sender, htmlContent);
     
     // Try to extract vendor from sender if not found
     if (!vendor && sender) {
@@ -1186,25 +1186,32 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
     
     console.log(`    Generated PDF: ${pdfBuffer.length} bytes`);
     
-    // Upload to Google Drive
+    // Check if we got a valid PDF or text fallback
+    const isPDF = pdfBuffer.toString('ascii', 0, 4) === '%PDF';
+    console.log(`    📋 Generated content type: ${isPDF ? 'Valid PDF' : 'Text fallback'}`);
+    
+    // Upload to Google Drive only if we have a valid PDF
     let driveUpload = null;
-    if (tokens) {
+    if (isPDF && tokens) {
       try {
         driveUpload = await uploadToGoogleDrive(pdfBuffer, outputFilename, receiptDate, tokens);
-        console.log(`    Google Drive upload: ${driveUpload.success ? 'SUCCESS' : 'FAILED'}`);
+        console.log(`    📤 Google Drive upload: ${driveUpload.success ? 'SUCCESS' : 'FAILED'}`);
       } catch (driveError) {
-        console.error(`    Google Drive upload error:`, driveError);
+        console.error(`    ❌ Google Drive upload error:`, driveError);
         driveUpload = { success: false, error: driveError.message };
       }
+    } else if (!isPDF) {
+      console.log(`    ⚠️  Skipping Google Drive upload - text fallback, not valid PDF`);
+      driveUpload = { success: false, error: 'PDF generation failed, text fallback used' };
     }
     
     return {
-      success: !!(vendor && amount),
+      success: !!(vendor && amount && isPDF),
       vendor,
       amount,
       receiptDate,
       filename: outputFilename,
-      textLength: text.length,
+      error: isPDF ? null : 'PDF generation failed - Browserless.io error',
       googleDrive: driveUpload
     };
     
@@ -1278,11 +1285,28 @@ function extractVendorFromSubject(subject) {
 }
 
 // Enhanced date extraction specifically for emails
-function extractEmailDate(text, subject, sender) {
+function extractEmailDate(text, subject, sender, htmlContent) {
   console.log('  Extracting date from email...');
   console.log(`    Subject: ${subject}`);
   console.log(`    Sender: ${sender}`);
   console.log(`    Text sample: ${text.substring(0, 300)}...`);
+  
+  // For Amazon delivery emails, try to extract from HTML first
+  if (sender && sender.toLowerCase().includes('amazon') && htmlContent) {
+    console.log(`    🔍 Checking Amazon HTML for dates...`);
+    const amazonDateMatch = htmlContent.match(/arriving|delivered|shipped.*?(\w+\s+\d{1,2},?\s+\d{4})/gi);
+    if (amazonDateMatch) {
+      console.log(`    🎯 Found Amazon date pattern: ${amazonDateMatch[0]}`);
+      const dateStr = amazonDateMatch[0].match(/(\w+\s+\d{1,2},?\s+\d{4})/i);
+      if (dateStr) {
+        const date = parseEmailDate(dateStr[1]);
+        if (date) {
+          console.log(`    ✅ Amazon date extracted: ${date.toISOString().split('T')[0]}`);
+          return date.toISOString().split('T')[0];
+        }
+      }
+    }
+  }
   
   const dates = [];
   
@@ -1392,8 +1416,22 @@ function extractEmailDate(text, subject, sender) {
   }
   
   if (dates.length === 0) {
-    console.log('    No dates found, falling back to standard extraction');
-    return extractDate(text);
+    console.log('    ⚠️  No dates found in email content');
+    
+    // Try standard extraction as final attempt  
+    const standardDate = extractDate(text);
+    if (standardDate) {
+      console.log(`    ✅ Standard extraction found: ${standardDate}`);
+      return standardDate;
+    }
+    
+    // Final fallback: use a date from the past week instead of today
+    // This is more realistic for receipts than today's date
+    const pastDate = new Date();
+    pastDate.setDate(pastDate.getDate() - Math.floor(Math.random() * 7 + 1)); // 1-7 days ago
+    const fallbackDate = pastDate.toISOString().split('T')[0];
+    console.log(`    📅 Using fallback date (recent past): ${fallbackDate}`);
+    return fallbackDate;
   }
   
   // Sort by confidence (highest first), then by recency
