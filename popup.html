@@ -372,13 +372,28 @@
             <!-- Date range slider (initially hidden) -->
             <div class="date-range-container" id="dateRangeContainer" style="display: none;">
                 <div class="range-header">
-                    <label>Scan last:</label>
-                    <span id="dayDisplay">7 days</span>
+                    <label>Scan from:</label>
+                    <span id="dayDisplay">7 to 1 days ago</span>
                 </div>
-                <input type="range" id="dayRange" min="1" max="90" value="7" class="date-slider">
-                <div class="range-labels">
-                    <span>1d</span>
-                    <span>90d</span>
+                
+                <!-- "From" slider (oldest date) -->
+                <div style="margin-bottom: 8px;">
+                    <label style="font-size: 11px; color: #9ca3af; margin-bottom: 4px; display: block;">From (days ago):</label>
+                    <input type="range" id="dayRangeFrom" min="1" max="90" value="7" class="date-slider">
+                    <div class="range-labels">
+                        <span>1d ago</span>
+                        <span>90d ago</span>
+                    </div>
+                </div>
+                
+                <!-- "To" slider (newest date) -->
+                <div>
+                    <label style="font-size: 11px; color: #9ca3af; margin-bottom: 4px; display: block;">To (days ago):</label>
+                    <input type="range" id="dayRangeTo" min="1" max="90" value="1" class="date-slider">
+                    <div class="range-labels">
+                        <span>1d ago</span>
+                        <span>90d ago</span>
+                    </div>
                 </div>
             </div>
             

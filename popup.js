@@ -224,7 +224,8 @@ class ExpenseGadget {
     setupEventListeners() {
         const closeBtn = document.getElementById('closeBtn');
         const searchInput = document.getElementById('searchInput');
-        const dayRange = document.getElementById('dayRange');
+        const dayRangeFrom = document.getElementById('dayRangeFrom');
+        const dayRangeTo = document.getElementById('dayRangeTo');
         const dayDisplay = document.getElementById('dayDisplay');
 
         // Close button
@@ -232,11 +233,34 @@ class ExpenseGadget {
             window.close();
         });
 
-        // Date range slider
-        dayRange.addEventListener('input', (e) => {
-            const days = parseInt(e.target.value);
-            dayDisplay.textContent = `${days} day${days > 1 ? 's' : ''}`;
-        });
+        // Reset sliders to default values on popup load
+        this.resetDateRangeSliders();
+
+        // Date range sliders with auto-scan
+        let scanTimeout = null;
+        const updateRangeDisplay = () => {
+            const fromDays = parseInt(dayRangeFrom.value);
+            const toDays = parseInt(dayRangeTo.value);
+            
+            // Ensure "from" is always >= "to" (from is older, to is newer)
+            if (fromDays < toDays) {
+                dayRangeFrom.value = toDays;
+                fromDays = toDays;
+            }
+            
+            dayDisplay.textContent = `${fromDays} to ${toDays} days ago`;
+            
+            // Auto-scan after user stops moving sliders (debounced)
+            if (scanTimeout) clearTimeout(scanTimeout);
+            if (this.gmailClient && this.gmailClient.isAuthenticated) {
+                scanTimeout = setTimeout(() => {
+                    this.autoScanGmail();
+                }, 1000); // Wait 1 second after user stops moving slider
+            }
+        };
+
+        dayRangeFrom.addEventListener('input', updateRangeDisplay);
+        dayRangeTo.addEventListener('input', updateRangeDisplay);
         
         // Gmail scan button
         const gmailScanBtn = document.getElementById('gmailScanBtn');
@@ -245,11 +269,9 @@ class ExpenseGadget {
                 // Handle connection
                 await this.connectGoogleDrive();
             } else if (gmailScanBtn.textContent === 'Scan Gmail') {
-                // Show date range slider
+                // Show date range slider and keep it visible
                 this.showDateRangeSlider();
-            } else {
-                // Handle scanning with selected date range
-                this.scanGmail();
+                // Button text now stays as "Scan Gmail" - no "Start Scan" state needed
             }
         });
 
@@ -524,9 +546,19 @@ class ExpenseGadget {
         }
     }
 
+    resetDateRangeSliders() {
+        const dayRangeFrom = document.getElementById('dayRangeFrom');
+        const dayRangeTo = document.getElementById('dayRangeTo');
+        const dayDisplay = document.getElementById('dayDisplay');
+        
+        // Reset to default values: scan last 7 days (from 7 days ago to 1 day ago)
+        dayRangeFrom.value = '7';
+        dayRangeTo.value = '1';
+        dayDisplay.textContent = '7 to 1 days ago';
+    }
+
     showDateRangeSlider() {
         const dateRangeContainer = document.getElementById('dateRangeContainer');
-        const gmailScanBtn = document.getElementById('gmailScanBtn');
         
         // Show the slider with animation
         dateRangeContainer.style.display = 'block';
@@ -534,8 +566,14 @@ class ExpenseGadget {
         dateRangeContainer.offsetHeight;
         dateRangeContainer.classList.add('show');
         
-        // Update button text
-        gmailScanBtn.textContent = 'Start Scan';
+        // No button text change - keep it as "Scan Gmail"
+    }
+
+    async autoScanGmail() {
+        // Auto-scan triggered by slider changes
+        if (this.gmailClient && this.gmailClient.isAuthenticated) {
+            await this.scanGmail();
+        }
     }
 
     connectGoogleDrive() {
@@ -583,22 +621,19 @@ class ExpenseGadget {
         const gmailScanBtn = document.getElementById('gmailScanBtn');
         const searchResults = document.getElementById('searchResults');
         const loading = document.getElementById('loading');
-        const dayRange = document.getElementById('dayRange');
-        const dateRangeContainer = document.getElementById('dateRangeContainer');
+        const dayRangeFrom = document.getElementById('dayRangeFrom');
+        const dayRangeTo = document.getElementById('dayRangeTo');
         
         // Get selected date range
-        const selectedDays = parseInt(dayRange.value);
-        console.log(`Scanning last ${selectedDays} days`);
+        const fromDays = parseInt(dayRangeFrom.value);
+        const toDays = parseInt(dayRangeTo.value);
+        console.log(`Scanning from ${fromDays} to ${toDays} days ago`);
         
         // Clear search results and show loading
         searchResults.innerHTML = '';
         loading.style.display = 'block';
         
-        // Hide date range slider
-        dateRangeContainer.classList.remove('show');
-        setTimeout(() => {
-            dateRangeContainer.style.display = 'none';
-        }, 300);
+        // Keep date range slider visible during scan
         
         // Disable button and show loading
         gmailScanBtn.disabled = true;
@@ -612,7 +647,8 @@ class ExpenseGadget {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    dayRange: selectedDays
+                    dayRangeFrom: fromDays,
+                    dayRangeTo: toDays
                 })
             });
             
@@ -626,14 +662,14 @@ class ExpenseGadget {
             // Hide loading
             loading.style.display = 'none';
             
-            // Show success message with day range info
-            const dayText = result.dayRange ? ` in last ${result.dayRange} day${result.dayRange > 1 ? 's' : ''}` : '';
+            // Show success message with date range info
+            const rangeText = result.daySpan ? ` from ${result.dayRangeFrom} to ${result.dayRangeTo} days ago (${result.daySpan} day${result.daySpan > 1 ? 's' : ''})` : '';
             if (result.receiptsProcessed > 0) {
-                this.showStatus(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails${dayText}!`);
+                this.showStatus(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails${rangeText}!`);
             } else if (result.receiptsFound > 0) {
-                this.showStatus(`Found ${result.receiptsFound} potential receipt emails${dayText}, but couldn't process them`);
+                this.showStatus(`Found ${result.receiptsFound} potential receipt emails${rangeText}, but couldn't process them`);
             } else {
-                this.showStatus(`No receipt emails found${dayText}`);
+                this.showStatus(`No receipt emails found${rangeText}`);
             }
             
         } catch (error) {
@@ -641,7 +677,7 @@ class ExpenseGadget {
             loading.style.display = 'none';
             this.showStatus('Failed to scan Gmail. Check your connection.');
         } finally {
-            // Re-enable button and reset to initial state
+            // Re-enable button and reset to scan state
             gmailScanBtn.disabled = false;
             gmailScanBtn.textContent = 'Scan Gmail';
         }

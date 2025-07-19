@@ -940,10 +940,11 @@ app.post('/scan-gmail', async (req, res) => {
 
     console.log('=== GMAIL SCAN STARTED ===');
     
-    // Extract dayRange from request body
-    const { dayRange } = req.body;
-    const daysToScan = dayRange || 30; // Default to 30 days if not provided
-    console.log(`Scanning last ${daysToScan} days`);
+    // Extract date range from request body
+    const { dayRangeFrom, dayRangeTo } = req.body;
+    const fromDays = dayRangeFrom || 7; // Default: 7 days ago
+    const toDays = dayRangeTo || 1;     // Default: 1 day ago
+    console.log(`Scanning from ${fromDays} to ${toDays} days ago`);
     
     // Set credentials
     oauth2Client.setCredentials(req.session.googleTokens);
@@ -965,15 +966,16 @@ app.post('/scan-gmail', async (req, res) => {
       '-subject:Shipped: -subject:Delivered: -subject:"Out for delivery" -subject:"Your package"',
       // Exclude refunds and cancellations
       '-subject:refund -subject:cancelled -subject:canceled -subject:"order cancelled"',
-      // Use dynamic date range
-      `newer_than:${daysToScan}d`
+      // Use date range - from X days ago to Y days ago
+      `newer_than:${fromDays}d older_than:${toDays}d`
     ].join(' ');
     
     console.log('Gmail search query:', query);
     
     // Scale maxResults based on date range - more days = more potential emails
-    const maxResults = Math.min(250, Math.max(25, daysToScan * 5)); // 5 emails per day on average, max 250
-    console.log(`Using maxResults: ${maxResults} for ${daysToScan} days`);
+    const daySpan = fromDays - toDays + 1; // Total days in the range
+    const maxResults = Math.min(250, Math.max(25, daySpan * 5)); // 5 emails per day on average, max 250
+    console.log(`Using maxResults: ${maxResults} for ${daySpan} day range (${fromDays} to ${toDays} days ago)`);
     
     const searchResponse = await gmail.users.messages.list({
       userId: 'me',
@@ -987,7 +989,9 @@ app.post('/scan-gmail', async (req, res) => {
         success: true, 
         receiptsFound: 0, 
         receiptsProcessed: 0,
-        dayRange: daysToScan,
+        dayRangeFrom: fromDays,
+        dayRangeTo: toDays,
+        daySpan: daySpan,
         results: []
       });
     }
@@ -998,8 +1002,8 @@ app.post('/scan-gmail', async (req, res) => {
     let processedCount = 0;
     let emailIndex = 0;
     
-    // Process each email - limit based on date range to avoid overwhelming the system
-    const emailsToProcess = Math.min(50, Math.max(10, Math.floor(daysToScan / 2))); // 1 email per 2 days, min 10, max 50
+    // Process each email - limit based on date range to avoid overwhelming the system  
+    const emailsToProcess = Math.min(50, Math.max(10, Math.floor(daySpan / 2))); // 1 email per 2 days, min 10, max 50
     console.log(`Processing first ${emailsToProcess} emails out of ${searchResponse.data.messages.length} found`);
     
     for (const message of searchResponse.data.messages.slice(0, emailsToProcess)) {
@@ -1100,7 +1104,9 @@ app.post('/scan-gmail', async (req, res) => {
       success: true,
       receiptsFound: searchResponse.data.messages.length,
       receiptsProcessed: processedCount,
-      dayRange: daysToScan,
+      dayRangeFrom: fromDays,
+      dayRangeTo: toDays,
+      daySpan: daySpan,
       results: results
     });
     
