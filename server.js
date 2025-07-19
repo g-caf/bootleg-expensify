@@ -2190,41 +2190,72 @@ app.post('/convert-email-to-pdf', async (req, res) => {
       </html>
     `;
     
-    // Convert HTML to PDF using Browserless.io
-    console.log('Using Browserless.io for PDF generation');
+    // Convert HTML to PDF with fallback strategy
+    let pdfBuffer;
     const browserlessToken = process.env.BROWSERLESS_TOKEN;
     
-    if (!browserlessToken || browserlessToken === 'YOUR_BROWSERLESS_TOKEN') {
-      throw new Error('BROWSERLESS_TOKEN not configured');
+    // Try Browserless.io first
+    if (browserlessToken && browserlessToken !== 'YOUR_BROWSERLESS_TOKEN') {
+      try {
+        console.log('Attempting PDF generation with Browserless.io');
+        const response = await fetch('https://chrome.browserless.io/pdf', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${browserlessToken}`
+          },
+          body: JSON.stringify({
+            html: htmlContent,
+            options: {
+              format: 'A4',
+              margin: {
+                top: '0.5in',
+                right: '0.5in',
+                bottom: '0.5in',
+                left: '0.5in'
+              },
+              printBackground: true
+            }
+          })
+        });
+        
+        if (response.ok) {
+          pdfBuffer = await response.buffer();
+          console.log('✅ PDF generated successfully with Browserless.io');
+        } else {
+          const errorText = await response.text();
+          console.error('Browserless.io failed:', response.status, errorText);
+          throw new Error(`Browserless API error: ${response.status}`);
+        }
+      } catch (browserlessError) {
+        console.error('Browserless.io error, falling back to html-pdf:', browserlessError.message);
+        pdfBuffer = null; // Will trigger fallback
+      }
     }
     
-    const response = await fetch('https://chrome.browserless.io/pdf', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${browserlessToken}`
-      },
-      body: JSON.stringify({
-        html: htmlContent,
-        options: {
+    // Fallback to html-pdf if Browserless.io failed or not configured
+    if (!pdfBuffer) {
+      console.log('Using html-pdf fallback for PDF generation');
+      pdfBuffer = await new Promise((resolve, reject) => {
+        htmlPdf.create(htmlContent, { 
           format: 'A4',
-          margin: {
+          border: {
             top: '0.5in',
             right: '0.5in',
             bottom: '0.5in',
             left: '0.5in'
-          },
-          printBackground: true
-        }
-      })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Browserless API error: ${response.status} - ${errorText}`);
+          }
+        }).toBuffer((err, buffer) => {
+          if (err) {
+            console.error('html-pdf error:', err);
+            reject(err);
+          } else {
+            console.log('✅ PDF generated successfully with html-pdf fallback');
+            resolve(buffer);
+          }
+        });
+      });
     }
-    
-    const pdfBuffer = await response.buffer();
     
     // Create filename
     const date = new Date().toISOString().split('T')[0];

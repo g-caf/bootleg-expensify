@@ -296,6 +296,11 @@ class ExpenseGadget {
             this.handleSearchInput(e.target.value);
         });
         
+        // Hide slider when focusing on search input
+        searchInput.addEventListener('focus', () => {
+            this.hideDateRangeSlider();
+        });
+        
         // Event delegation for convert buttons (dynamically created)
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('convert-btn')) {
@@ -590,6 +595,18 @@ class ExpenseGadget {
         dateRangeContainer.classList.add('show');
         
         // No button text change - keep it as "Scan Gmail"
+    }
+
+    hideDateRangeSlider() {
+        const dateRangeContainer = document.getElementById('dateRangeContainer');
+        
+        // Hide the slider with animation
+        dateRangeContainer.classList.remove('show');
+        setTimeout(() => {
+            if (!dateRangeContainer.classList.contains('show')) {
+                dateRangeContainer.style.display = 'none';
+            }
+        }, 300);
     }
 
     async autoScanGmail() {
