@@ -11,7 +11,7 @@ const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-console.log('=== FORCING REDEPLOY - AUTH TOKEN ENDPOINT SHOULD BE AVAILABLE ===');
+console.log('=== FORCING REDEPLOY - CONVERT-EMAIL-TO-PDF ENDPOINT AVAILABLE ===');
 
 // Track processed emails to prevent duplicates - persistent storage
 const PROCESSED_EMAILS_FILE = path.join(__dirname, 'processed_emails.json');
