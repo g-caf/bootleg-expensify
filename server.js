@@ -2068,6 +2068,87 @@ async function uploadToGoogleDrive(fileBuffer, fileName, receiptDate, tokens) {
   }
 }
 
+// Convert email to PDF endpoint
+app.post('/convert-email-to-pdf', async (req, res) => {
+  try {
+    const { emailId, emailContent } = req.body;
+    
+    if (!emailId || !emailContent) {
+      return res.status(400).json({ error: 'Email ID and content are required' });
+    }
+    
+    console.log('Converting email to PDF:', emailId);
+    
+    // Create HTML from email content
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Email Receipt - ${emailContent.subject || 'No Subject'}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; }
+          .email-header { border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
+          .email-content { line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="email-header">
+          <h2>${emailContent.subject || 'No Subject'}</h2>
+          <p><strong>From:</strong> ${emailContent.from || 'Unknown'}</p>
+          <p><strong>Date:</strong> ${emailContent.date || 'Unknown'}</p>
+        </div>
+        <div class="email-content">
+          ${emailContent.body || 'No content available'}
+        </div>
+      </body>
+      </html>
+    `;
+    
+    // Convert HTML to PDF using html-pdf
+    const pdfBuffer = await new Promise((resolve, reject) => {
+      htmlPdf.create(htmlContent, { 
+        format: 'A4',
+        border: {
+          top: '0.5in',
+          right: '0.5in',
+          bottom: '0.5in',
+          left: '0.5in'
+        }
+      }).toBuffer((err, buffer) => {
+        if (err) reject(err);
+        else resolve(buffer);
+      });
+    });
+    
+    // Create filename
+    const date = new Date().toISOString().split('T')[0];
+    const subject = (emailContent.subject || 'Email').replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${subject}_${date}.pdf`;
+    
+    // Upload to Google Drive if user is authenticated
+    let driveUpload = null;
+    if (req.session.googleTokens) {
+      try {
+        driveUpload = await uploadToGoogleDrive(pdfBuffer, filename, date, req.session.googleTokens);
+      } catch (driveError) {
+        console.error('Google Drive upload failed:', driveError);
+        driveUpload = { success: false, error: driveError.message };
+      }
+    }
+    
+    res.json({
+      success: true,
+      filename: filename,
+      googleDrive: driveUpload
+    });
+    
+  } catch (error) {
+    console.error('Error converting email to PDF:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Receipt parser server running on port ${PORT}`);
 });

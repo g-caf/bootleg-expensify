@@ -761,11 +761,37 @@ class ExpenseGadget {
         buttonElement.textContent = 'Converting...';
         
         try {
-            // For now, show that we need to implement server-side email processing
-            // We'll need to add a new endpoint that takes an email ID and processes it
-            this.showStatus('⚠️ Email conversion coming soon - server endpoint needed', 'warning');
-            buttonElement.textContent = '⏳ Soon';
-            buttonElement.style.background = '#f59e0b';
+            // Get the email content from Gmail
+            const emailContent = await this.gmailClient.getMessageDetails(emailId);
+            console.log('Got email content:', emailContent);
+            
+            // Send to server for PDF conversion
+            const response = await fetch('https://bootleg-expensify.onrender.com/convert-email-to-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    emailId: emailId,
+                    emailContent: emailContent
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            console.log('Conversion result:', result);
+            
+            if (result.success) {
+                buttonElement.textContent = '✅ Done';
+                buttonElement.style.background = '#10b981';
+                this.showStatus(`✅ Email converted to PDF successfully!`, 'success');
+            } else {
+                throw new Error(result.error || 'Conversion failed');
+            }
             
         } catch (error) {
             console.error('Convert error:', error);
