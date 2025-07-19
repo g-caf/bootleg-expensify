@@ -59,21 +59,27 @@ class GmailClient {
 
     async checkStoredAuth() {
         try {
+            console.log('GmailClient: checkStoredAuth started');
             // First try to get token from server (most reliable)
             const serverToken = await this.getTokenFromServer();
+            console.log('GmailClient: serverToken result:', serverToken ? 'token received' : 'no token');
             if (serverToken) {
                 this.accessToken = serverToken;
                 this.isAuthenticated = true;
                 await chrome.storage.local.set({ gmailAccessToken: serverToken });
+                console.log('GmailClient: authenticated via server token');
                 return true;
             }
 
             // Fallback to stored token
+            console.log('GmailClient: checking stored token');
             const result = await chrome.storage.local.get(['gmailAccessToken']);
+            console.log('GmailClient: stored token exists:', !!result.gmailAccessToken);
             if (result.gmailAccessToken) {
                 this.accessToken = result.gmailAccessToken;
                 // Verify token is still valid
                 const isValid = await this.verifyToken();
+                console.log('GmailClient: stored token valid:', isValid);
                 if (isValid) {
                     this.isAuthenticated = true;
                     return true;
@@ -82,6 +88,8 @@ class GmailClient {
         } catch (error) {
             console.error('Error checking stored auth:', error);
         }
+        console.log('GmailClient: not authenticated');
+        this.isAuthenticated = false;
         return false;
     }
 
@@ -446,8 +454,11 @@ class ExpenseGadget {
                 this.updateGmailAuthStatus(false);
                 return false;
             }
+            console.log('Checking Gmail authentication...');
             const isAuthenticated = await this.gmailClient.checkStoredAuth();
+            console.log('Gmail authentication result:', isAuthenticated);
             this.updateGmailAuthStatus(isAuthenticated);
+            console.log('Updated Gmail auth status in UI');
             return isAuthenticated;
         } catch (error) {
             console.error('Error checking Gmail auth:', error);
@@ -472,6 +483,8 @@ class ExpenseGadget {
     }
 
     updateGmailAuthStatus(isAuthenticated) {
+        console.log('updateGmailAuthStatus called with:', isAuthenticated);
+        
         // Enable search functionality if Gmail is authenticated
         const searchInput = document.getElementById('searchInput');
         if (searchInput) {
@@ -479,6 +492,7 @@ class ExpenseGadget {
             searchInput.placeholder = isAuthenticated 
                 ? 'Search your email for receipts...'
                 : 'Connect to Google to enable search';
+            console.log('Updated search input. Disabled:', !isAuthenticated, 'Placeholder:', searchInput.placeholder);
         }
         
         // Update scan button based on authentication status
@@ -488,11 +502,15 @@ class ExpenseGadget {
                 gmailScanBtn.textContent = 'Scan Gmail';
                 gmailScanBtn.className = 'scan-btn';
                 gmailScanBtn.disabled = false;
+                console.log('Set button to authenticated state: "Scan Gmail"');
             } else {
                 gmailScanBtn.textContent = 'Connect to Google';
                 gmailScanBtn.className = 'scan-btn connect';
                 gmailScanBtn.disabled = false;
+                console.log('Set button to non-authenticated state: "Connect to Google"');
             }
+        } else {
+            console.error('Gmail scan button not found!');
         }
     }
 
