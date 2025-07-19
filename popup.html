@@ -418,6 +418,29 @@
             color: #9ca3af;
             margin-top: 4px;
         }
+        
+        /* Scan Results Area */
+        .scan-results-area {
+            margin: 12px 0;
+            padding: 8px 12px;
+            background: #374151;
+            border: 1px solid #4b5563;
+            border-radius: 6px;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+        }
+        
+        .scan-results-area.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .scan-results-text {
+            font-size: 13px;
+            color: #d1d5db;
+            text-align: center;
+        }
 
     </style>
 </head>
@@ -463,6 +486,11 @@
                     <span>Today</span>
                     <span>90d ago</span>
                 </div>
+            </div>
+            
+            <!-- Scan results area (below slider) -->
+            <div class="scan-results-area" id="scanResultsArea" style="display: none;">
+                <div class="scan-results-text" id="scanResultsText"></div>
             </div>
             
             <div class="search-results" id="searchResults"></div>

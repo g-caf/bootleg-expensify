@@ -599,12 +599,21 @@ class ExpenseGadget {
 
     hideDateRangeSlider() {
         const dateRangeContainer = document.getElementById('dateRangeContainer');
+        const scanResultsArea = document.getElementById('scanResultsArea');
         
         // Hide the slider with animation
         dateRangeContainer.classList.remove('show');
         setTimeout(() => {
             if (!dateRangeContainer.classList.contains('show')) {
                 dateRangeContainer.style.display = 'none';
+            }
+        }, 300);
+        
+        // Also hide scan results
+        scanResultsArea.classList.remove('show');
+        setTimeout(() => {
+            if (!scanResultsArea.classList.contains('show')) {
+                scanResultsArea.style.display = 'none';
             }
         }, 300);
     }
@@ -655,6 +664,28 @@ class ExpenseGadget {
         }, 8000);
     }
 
+    showScanResults(message) {
+        const scanResultsArea = document.getElementById('scanResultsArea');
+        const scanResultsText = document.getElementById('scanResultsText');
+        
+        scanResultsText.textContent = message;
+        scanResultsArea.style.display = 'block';
+        
+        // Force reflow for animation
+        scanResultsArea.offsetHeight;
+        scanResultsArea.classList.add('show');
+        
+        // Keep results visible for 8 seconds
+        setTimeout(() => {
+            scanResultsArea.classList.remove('show');
+            setTimeout(() => {
+                if (!scanResultsArea.classList.contains('show')) {
+                    scanResultsArea.style.display = 'none';
+                }
+            }, 300);
+        }, 8000);
+    }
+
     async scanGmail() {
         console.log('=== GMAIL SCAN STARTED ===');
         
@@ -702,14 +733,14 @@ class ExpenseGadget {
             // Hide loading
             loading.classList.remove('show');
             
-            // Show success message with date range info
+            // Show scan results below the slider
             const rangeText = result.daySpan ? ` from ${result.dayRangeFrom} to ${result.dayRangeTo} days ago (${result.daySpan} day${result.daySpan > 1 ? 's' : ''})` : '';
             if (result.receiptsProcessed > 0) {
-                this.showStatus(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails${rangeText}!`);
+                this.showScanResults(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails${rangeText}!`);
             } else if (result.receiptsFound > 0) {
-                this.showStatus(`Found ${result.receiptsFound} potential receipt emails${rangeText}, but couldn't process them`);
+                this.showScanResults(`Found ${result.receiptsFound} potential receipt emails${rangeText}, but couldn't process them`);
             } else {
-                this.showStatus(`No receipt emails found${rangeText}`);
+                this.showScanResults(`No receipt emails found${rangeText}`);
             }
             
         } catch (error) {
@@ -844,7 +875,7 @@ class ExpenseGadget {
             if (result.success) {
                 buttonElement.textContent = '✅ Done';
                 buttonElement.style.background = '#10b981';
-                this.showStatus(`✅ Email converted to PDF successfully!`, 'success');
+                // No overlay message - just button state change
             } else {
                 throw new Error(result.error || 'Conversion failed');
             }
