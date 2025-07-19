@@ -1,11 +1,33 @@
-// Extension setup for sequential PDF processing
-console.log('=== POPUP.JS SCRIPT LOADING ===');
-console.log('Chrome runtime available:', !!chrome.runtime);
-console.log('Extension mode: Sequential PDF processing with progress bar');
+// IMMEDIATE TEST - popup.js loading
+console.log('=== POPUP.JS STARTING ===');
 
-// Test if popup.js is executing
-document.title = 'POPUP JS LOADED - ' + new Date().toISOString();
-console.log('=== POPUP.JS EXECUTING ===');
+// Check if running in proper context
+if (typeof chrome === 'undefined') {
+    console.error('Chrome APIs not available');
+} else {
+    console.log('Chrome runtime available:', !!chrome.runtime);
+}
+
+// DOM ready check
+if (document.readyState === 'loading') {
+    console.log('DOM still loading, waiting...');
+    document.addEventListener('DOMContentLoaded', initializeExtension);
+} else {
+    console.log('DOM already loaded, initializing immediately');
+    initializeExtension();
+}
+
+function initializeExtension() {
+    console.log('=== INITIALIZING EXTENSION ===');
+    try {
+        const expenseGadget = new ExpenseGadget();
+        console.log('ExpenseGadget created successfully');
+        expenseGadget.init();
+        console.log('ExpenseGadget initialized successfully');
+    } catch (error) {
+        console.error('Failed to create ExpenseGadget:', error);
+    }
+}
 
 // Gmail API client for browser extension
 class GmailClient {
@@ -193,7 +215,7 @@ class ExpenseGadget {
         this.currentTab = 'scan';
         this.searchDebounceTimer = null;
         this.gmailClient = null;
-        this.init();
+        // Don't auto-init, will be called externally
     }
 
     async init() {
@@ -807,7 +829,4 @@ class ExpenseGadget {
     }
 }
 
-// Initialize the extension
-console.log('=== ABOUT TO CREATE EXPENSEGADGET ===');
-const expenseGadget = new ExpenseGadget();
-console.log('=== EXPENSEGADGET CREATED ===');
+// Extension initialization is handled by initializeExtension() function above
