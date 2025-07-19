@@ -196,7 +196,6 @@ class ExpenseGadget {
         } catch (error) {
             console.error('Failed to initialize Gmail client:', error);
         }
-        await this.checkGoogleDriveStatus();
         await this.checkGmailAuth();
     }
 
@@ -204,7 +203,7 @@ class ExpenseGadget {
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const closeBtn = document.getElementById('closeBtn');
-        const googleDriveSection = document.getElementById('googleDriveSection');
+
         const searchInput = document.getElementById('searchInput');
 
         // Close button
@@ -223,10 +222,7 @@ class ExpenseGadget {
             this.processFiles(e.target.files);
         });
 
-        // Google Drive section (entire section is clickable)
-        googleDriveSection.addEventListener('click', () => {
-            this.handleDriveCheckboxClick();
-        });
+
         
         // Gmail scan button
         const gmailScanBtn = document.getElementById('gmailScanBtn');
@@ -487,45 +483,9 @@ class ExpenseGadget {
         URL.revokeObjectURL(url);
     }
 
-    async checkGoogleDriveStatus() {
-        try {
-            const response = await fetch('https://bootleg-expensify.onrender.com/auth/status', {
-                credentials: 'include'
-            });
-            const data = await response.json();
-            this.updateDriveStatus(data.authenticated);
-        } catch (error) {
-            console.error('Error checking Google Drive status:', error);
-            this.updateDriveStatus(false);
-        }
-    }
 
-    updateDriveStatus(isConnected) {
-        const statusText = document.getElementById('driveStatusText');
-        const checkbox = document.getElementById('driveCheckbox');
-        const gmailScanBtn = document.getElementById('gmailScanBtn');
 
-        if (isConnected) {
-            statusText.textContent = 'Connect to Google';
-            statusText.className = 'drive-status-text connected'; // This will hide the text
-            checkbox.className = 'drive-checkbox connected';
-            gmailScanBtn.disabled = false; // Enable Gmail scan when connected
-        } else {
-            statusText.textContent = 'Connect to Google';
-            statusText.className = 'drive-status-text';
-            checkbox.className = 'drive-checkbox';
-            gmailScanBtn.disabled = true; // Disable Gmail scan when not connected
-        }
-    }
 
-    async handleDriveCheckboxClick() {
-        const checkbox = document.getElementById('driveCheckbox');
-        const isConnected = checkbox.classList.contains('connected');
-        
-        if (!isConnected) {
-            this.connectGoogleDrive();
-        }
-    }
 
     async checkGmailAuth() {
         const isAuthenticated = await this.gmailClient.checkStoredAuth();
@@ -574,19 +534,18 @@ class ExpenseGadget {
     }
 
     connectGoogleDrive() {
-        // Open Google Drive authentication in new tab
+        // Open Google authentication in new tab
         const authUrl = 'https://bootleg-expensify.onrender.com/auth/google';
         window.open(authUrl, '_blank', 'width=500,height=600');
         
-        // Check status periodically to see when authentication completes
+        // Check Gmail auth status periodically to see when authentication completes
         const checkInterval = setInterval(async () => {
-            await this.checkGoogleDriveStatus();
-            const statusText = document.getElementById('driveStatusText');
-            if (statusText.textContent.includes('Connected')) {
+            const isAuthenticated = await this.gmailClient.checkAuthentication();
+            if (isAuthenticated) {
                 clearInterval(checkInterval);
-                this.showStatus('✅ Google Drive connected successfully!', 'success');
-                // Also check Gmail auth since we use the same OAuth flow
-                await this.checkGmailAuth();
+                this.showStatus('✅ Google account connected successfully!', 'success');
+                // Update the UI
+                this.updateGmailAuthStatus(true);
             }
         }, 2000);
 
