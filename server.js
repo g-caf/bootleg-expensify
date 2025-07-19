@@ -998,11 +998,14 @@ app.post('/scan-gmail', async (req, res) => {
     let processedCount = 0;
     let emailIndex = 0;
     
-    // Process each email
-    for (const message of searchResponse.data.messages.slice(0, 10)) { // Limit to 10 for now
+    // Process each email - limit based on date range to avoid overwhelming the system
+    const emailsToProcess = Math.min(50, Math.max(10, Math.floor(daysToScan / 2))); // 1 email per 2 days, min 10, max 50
+    console.log(`Processing first ${emailsToProcess} emails out of ${searchResponse.data.messages.length} found`);
+    
+    for (const message of searchResponse.data.messages.slice(0, emailsToProcess)) {
       emailIndex++;
       try {
-        console.log(`\n=== EMAIL ${emailIndex}/10 ===`);
+        console.log(`\n=== EMAIL ${emailIndex}/${emailsToProcess} ===`);
         console.log(`Processing message ID: ${message.id}`);
         
         // Check if we've already processed this email
