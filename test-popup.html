@@ -2,15 +2,18 @@
 <html>
 <head>
     <title>Test</title>
+    <script src="test-script.js"></script>
 </head>
 <body>
     <h1>TEST POPUP</h1>
-    <button id="testBtn">Test Button</button>
+    <button id="testBtn">Test Button (External Script)</button>
     <script>
-        console.log('TEST SCRIPT RUNNING');
-        document.getElementById('testBtn').addEventListener('click', () => {
-            console.log('Button clicked!');
-            alert('Button works!');
+        console.log('INLINE: TEST SCRIPT RUNNING');
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('testBtn').addEventListener('click', () => {
+                console.log('INLINE: Button clicked!');
+                alert('INLINE: Button works!');
+            });
         });
     </script>
 </body>
