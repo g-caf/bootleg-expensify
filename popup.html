@@ -15,7 +15,8 @@
             width: 400px;
             height: 368px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            background: #fafafa;
+            background: #1a1a1a;
+            color: #9ca3af;
             -webkit-clip-path: inset(0 round 8px);
             clip-path: inset(0 round 8px);
             -webkit-border-radius: 8px;
@@ -27,7 +28,7 @@
         }
         
         .header {
-            background: white;
+            background: #1a1a1a;
             padding: 8px 12px;
             display: flex;
             justify-content: space-between;
@@ -58,7 +59,7 @@
         .close-btn {
             background: none;
             border: none;
-            color: #6c757d;
+            color: #6b7280;
             font-size: 16px;
             cursor: pointer;
             padding: 4px;
@@ -71,19 +72,21 @@
         }
         
         .close-btn:hover {
-            background: #f8f9fa;
-            color: #495057;
+            background: #374151;
+            color: #9ca3af;
         }
         
         .main-content {
             flex: 1;
-            background: white;
+            background: #1a1a1a;
             padding: 16px;
             border-radius: 0 0 8px 8px;
             -webkit-border-radius: 0 0 8px 8px;
             overflow: hidden;
             box-sizing: border-box;
             overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
         
 
@@ -133,28 +136,35 @@
         .search-input {
             flex: 1;
             padding: 8px 12px;
-            border: 1px solid #d1d5db;
+            border: 1px solid #4b5563;
             border-radius: 8px;
             font-size: 13px;
             box-sizing: border-box;
+            background: #374151;
+            color: #d1d5db;
         }
         
         .search-input:focus {
             outline: none;
             border-color: #f44e40;
+            background: #4b5563;
+        }
+        
+        .search-input::placeholder {
+            color: #9ca3af;
         }
         
         .search-results {
-            max-height: 140px;
+            flex: 1;
             overflow-y: auto;
         }
         
         .search-result-item {
             padding: 8px;
-            border: 1px solid #e5e5e5;
+            border: 1px solid #4b5563;
             border-radius: 6px;
             margin-bottom: 6px;
-            background: white;
+            background: #374151;
         }
         
         .search-result-header {
@@ -166,7 +176,7 @@
         
         .search-result-subject {
             font-weight: 500;
-            color: #374151;
+            color: #d1d5db;
             font-size: 12px;
             flex: 1;
             margin-right: 8px;
@@ -174,13 +184,13 @@
         
         .search-result-date {
             font-size: 10px;
-            color: #6b7280;
+            color: #9ca3af;
             white-space: nowrap;
         }
         
         .search-result-from {
             font-size: 11px;
-            color: #6b7280;
+            color: #9ca3af;
             margin-bottom: 6px;
         }
         
@@ -206,28 +216,29 @@
         }
         
         .status {
-            margin-bottom: 15px;
-            padding: 10px;
-            border-radius: 5px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 14px;
+            color: #d1d5db;
             display: none;
+            z-index: 10;
+            max-width: 300px;
+            padding: 20px;
         }
         
-        .status.success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .status.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .status.warning {
-            background-color: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 14px;
+            color: #d1d5db;
+            display: none;
+            z-index: 10;
         }
         
 
@@ -249,6 +260,7 @@
     
     <div class="main-content">
         <div class="status" id="status"></div>
+        <div class="loading" id="loading">🔍 Scanning your email...</div>
         
         <div class="search-section">
             <div class="search-bar-container">

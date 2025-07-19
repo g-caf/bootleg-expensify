@@ -493,23 +493,33 @@ class ExpenseGadget {
         }, 120000);
     }
 
-    showStatus(message, type) {
+    showStatus(message) {
         const status = document.getElementById('status');
+        const searchResults = document.getElementById('searchResults');
+        
         status.textContent = message;
-        status.className = `status ${type}`;
         status.style.display = 'block';
         
-        // Keep messages visible for appropriate duration
-        const duration = type === 'success' ? 8000 : 10000;
+        // Hide search results when showing status
+        searchResults.style.opacity = '0.3';
+        
+        // Keep messages visible for 8 seconds
         setTimeout(() => {
             status.style.display = 'none';
-        }, duration);
+            searchResults.style.opacity = '1';
+        }, 8000);
     }
 
     async scanGmail() {
         console.log('=== GMAIL SCAN STARTED ===');
         
         const gmailScanBtn = document.getElementById('gmailScanBtn');
+        const searchResults = document.getElementById('searchResults');
+        const loading = document.getElementById('loading');
+        
+        // Clear search results and show loading
+        searchResults.innerHTML = '';
+        loading.style.display = 'block';
         
         // Disable button and show loading
         gmailScanBtn.disabled = true;
@@ -531,18 +541,22 @@ class ExpenseGadget {
             const result = await response.json();
             console.log('Gmail scan result:', result);
             
+            // Hide loading
+            loading.style.display = 'none';
+            
             // Show success message only
             if (result.receiptsProcessed > 0) {
-                this.showStatus(`✅ Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails!`, 'success');
+                this.showStatus(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails!`);
             } else if (result.receiptsFound > 0) {
-                this.showStatus(`⚠️ Found ${result.receiptsFound} potential receipt emails, but couldn't process them`, 'warning');
+                this.showStatus(`Found ${result.receiptsFound} potential receipt emails, but couldn't process them`);
             } else {
-                this.showStatus('📭 No recent order confirmation emails found', 'warning');
+                this.showStatus('No recent order confirmation emails found');
             }
             
         } catch (error) {
             console.error('Gmail scan error:', error);
-            this.showStatus('❌ Failed to scan Gmail. Check your connection.', 'error');
+            loading.style.display = 'none';
+            this.showStatus('Failed to scan Gmail. Check your connection.');
         } finally {
             // Re-enable button
             gmailScanBtn.disabled = false;
