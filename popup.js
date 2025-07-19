@@ -624,13 +624,20 @@ class ExpenseGadget {
             const from = email.from || 'Unknown Sender';
             const date = email.date || 'No Date';
             
+            // Extract just the email address from from field
+            const emailAddress = this.extractEmailAddress(from);
+            
             html += `<div class="search-result-item">`;
             html += `<div class="search-result-header">`;
+            html += `<div class="search-result-left">`;
             html += `<div class="search-result-subject">${this.escapeHtml(subject)}</div>`;
-            html += `<div class="search-result-date">${this.formatDate(date)}</div>`;
+            html += `<div class="search-result-from">From: ${this.escapeHtml(emailAddress)}</div>`;
             html += `</div>`;
-            html += `<div class="search-result-from">From: ${this.escapeHtml(from)}</div>`;
+            html += `<div class="search-result-right">`;
+            html += `<div class="search-result-date">${this.formatDate(date)}</div>`;
             html += `<button class="convert-btn" data-email-id="${emailId}">Convert to PDF</button>`;
+            html += `</div>`;
+            html += `</div>`;
             html += `</div>`;
         });
         
@@ -704,6 +711,12 @@ class ExpenseGadget {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    extractEmailAddress(fromField) {
+        // Extract email from formats like "Name <email@domain.com>" or just "email@domain.com"
+        const emailMatch = fromField.match(/<([^>]+)>/) || fromField.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+        return emailMatch ? emailMatch[1] : fromField;
     }
 
     formatDate(dateString) {

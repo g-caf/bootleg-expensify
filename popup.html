@@ -4,16 +4,16 @@
     <meta charset="utf-8">
     <style>
         html, body {
-            padding: 0;
+            padding: 8px 0 0 0;
             margin: 0;
             width: 400px;
-            height: 368px;
+            height: 376px;
             overflow: hidden;
         }
         
         .popup-container {
             width: 400px;
-            height: 368px;
+            height: 376px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
             background: #1a1a1a;
             color: #9ca3af;
@@ -172,12 +172,26 @@
             margin-bottom: 3px;
         }
         
+        .search-result-left {
+            flex: 1;
+            margin-right: 8px;
+        }
+        
+        .search-result-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+        
         .search-result-subject {
             font-weight: 500;
             color: #d1d5db;
             font-size: 12px;
-            flex: 1;
-            margin-right: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 280px;
         }
         
         .search-result-date {
