@@ -2079,6 +2079,19 @@ app.post('/convert-email-to-pdf', async (req, res) => {
     
     console.log('Converting email to PDF:', emailId);
     
+    // Clean and process email body
+    let cleanBody = emailContent.body || 'No content available';
+    
+    // If body contains HTML, try to clean it up
+    if (cleanBody.includes('<') && cleanBody.includes('>')) {
+      // Remove style tags and their content
+      cleanBody = cleanBody.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+      // Remove script tags and their content
+      cleanBody = cleanBody.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+      // Remove excessive whitespace and line breaks
+      cleanBody = cleanBody.replace(/\s+/g, ' ').trim();
+    }
+    
     // Create HTML from email content
     const htmlContent = `
       <!DOCTYPE html>
@@ -2087,39 +2100,113 @@ app.post('/convert-email-to-pdf', async (req, res) => {
         <meta charset="utf-8">
         <title>Email Receipt - ${emailContent.subject || 'No Subject'}</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 20px; }
-          .email-header { border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
-          .email-content { line-height: 1.6; }
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+            margin: 40px; 
+            line-height: 1.6;
+            color: #333;
+          }
+          .receipt-header { 
+            text-align: center;
+            border-bottom: 2px solid #007bff; 
+            padding-bottom: 20px; 
+            margin-bottom: 30px; 
+          }
+          .receipt-title {
+            color: #007bff;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+          }
+          .email-info { 
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+          }
+          .email-info h3 {
+            color: #007bff;
+            margin-top: 0;
+            border-left: 4px solid #007bff;
+            padding-left: 10px;
+          }
+          .info-item { margin-bottom: 8px; }
+          .email-content { 
+            background: white;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            max-width: 100%;
+            overflow-wrap: break-word;
+          }
+          .email-content h3 {
+            color: #007bff;
+            border-left: 4px solid #007bff;
+            padding-left: 10px;
+          }
+          table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+          td, th { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #f2f2f2; }
+          img { max-width: 100%; height: auto; }
         </style>
       </head>
       <body>
-        <div class="email-header">
-          <h2>${emailContent.subject || 'No Subject'}</h2>
-          <p><strong>From:</strong> ${emailContent.from || 'Unknown'}</p>
-          <p><strong>Date:</strong> ${emailContent.date || 'Unknown'}</p>
+        <div class="receipt-header">
+          <div class="receipt-title">EMAIL RECEIPT</div>
         </div>
+        
+        <div class="email-info">
+          <h3>Email Information</h3>
+          <div class="info-item"><strong>From:</strong> ${emailContent.from || 'Unknown'}</div>
+          <div class="info-item"><strong>Subject:</strong> ${emailContent.subject || 'No Subject'}</div>
+          <div class="info-item"><strong>Generated:</strong> ${new Date().toLocaleDateString()}</div>
+        </div>
+        
         <div class="email-content">
-          ${emailContent.body || 'No content available'}
+          <h3>Email Content</h3>
+          ${cleanBody}
         </div>
       </body>
       </html>
     `;
     
-    // Convert HTML to PDF using html-pdf
-    const pdfBuffer = await new Promise((resolve, reject) => {
-      htmlPdf.create(htmlContent, { 
+    // Convert HTML to PDF using Puppeteer
+    let pdfBuffer;
+    if (puppeteer) {
+      console.log('Using Puppeteer for PDF generation');
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      const page = await browser.newPage();
+      await page.setContent(htmlContent);
+      pdfBuffer = await page.pdf({ 
         format: 'A4',
-        border: {
+        margin: {
           top: '0.5in',
           right: '0.5in',
           bottom: '0.5in',
           left: '0.5in'
         }
-      }).toBuffer((err, buffer) => {
-        if (err) reject(err);
-        else resolve(buffer);
       });
-    });
+      await browser.close();
+    } else {
+      console.log('Puppeteer not available, using html-pdf fallback');
+      pdfBuffer = await new Promise((resolve, reject) => {
+        htmlPdf.create(htmlContent, { 
+          format: 'A4',
+          border: {
+            top: '0.5in',
+            right: '0.5in',
+            bottom: '0.5in',
+            left: '0.5in'
+          }
+        }).toBuffer((err, buffer) => {
+          if (err) reject(err);
+          else resolve(buffer);
+        });
+      });
+    }
     
     // Create filename
     const date = new Date().toISOString().split('T')[0];
