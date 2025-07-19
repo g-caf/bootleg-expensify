@@ -60,37 +60,34 @@ class GmailClient {
     async checkStoredAuth() {
         try {
             console.log('GmailClient: checkStoredAuth started');
-            // First try to get token from server (most reliable)
+            
+            // ONLY trust server token - don't use stored tokens
+            // This prevents client/server auth state mismatch
             const serverToken = await this.getTokenFromServer();
             console.log('GmailClient: serverToken result:', serverToken ? 'token received' : 'no token');
+            
             if (serverToken) {
                 this.accessToken = serverToken;
                 this.isAuthenticated = true;
                 await chrome.storage.local.set({ gmailAccessToken: serverToken });
                 console.log('GmailClient: authenticated via server token');
                 return true;
-            }
-
-            // Fallback to stored token
-            console.log('GmailClient: checking stored token');
-            const result = await chrome.storage.local.get(['gmailAccessToken']);
-            console.log('GmailClient: stored token exists:', !!result.gmailAccessToken);
-            if (result.gmailAccessToken) {
-                this.accessToken = result.gmailAccessToken;
-                // Verify token is still valid
-                const isValid = await this.verifyToken();
-                console.log('GmailClient: stored token valid:', isValid);
-                if (isValid) {
-                    this.isAuthenticated = true;
-                    return true;
-                }
+            } else {
+                // Server says not authenticated - clear any stale local data
+                console.log('GmailClient: server not authenticated, clearing local storage');
+                await chrome.storage.local.remove(['gmailAccessToken']);
+                this.accessToken = null;
+                this.isAuthenticated = false;
+                return false;
             }
         } catch (error) {
             console.error('Error checking stored auth:', error);
+            // Clear stale data on error
+            await chrome.storage.local.remove(['gmailAccessToken']);
+            this.accessToken = null;
+            this.isAuthenticated = false;
+            return false;
         }
-        console.log('GmailClient: not authenticated');
-        this.isAuthenticated = false;
-        return false;
     }
 
     async verifyToken() {
@@ -203,6 +200,11 @@ class ExpenseGadget {
             console.log('Creating Gmail client...');
             this.gmailClient = new GmailClient();
             console.log('Gmail client created successfully');
+            
+            // Clear any stale authentication state on startup
+            console.log('Clearing any stale authentication data...');
+            await this.gmailClient.logout();
+            
         } catch (error) {
             console.error('Failed to initialize Gmail client:', error);
         }
