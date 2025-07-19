@@ -2037,30 +2037,18 @@ app.post('/convert-email-to-pdf', async (req, res) => {
       outputFilename = `Email Receipt ${dateStr}.pdf`;
     }
     
-    // Convert to PDF
+    // Convert to PDF - skip Puppeteer on Render, use html-pdf directly
     let pdfBuffer;
-    try {
-      pdfBuffer = await createEmailReceiptPDFWithPuppeteer({
-        subject,
-        from,
-        date,
-        content: emailBody || `<pre>${emailText}</pre>`,
-        vendor,
-        amount,
-        receiptDate
-      });
-    } catch (puppeteerError) {
-      console.log('Puppeteer failed, trying html-pdf fallback:', puppeteerError.message);
-      pdfBuffer = await createEmailReceiptPDF({
-        subject,
-        from,
-        date,
-        content: emailBody || `<pre>${emailText}</pre>`,
-        vendor,
-        amount,
-        receiptDate
-      });
-    }
+    console.log('Creating PDF with html-pdf (Puppeteer not available on Render)');
+    pdfBuffer = await createEmailReceiptPDF({
+      subject,
+      from,
+      date,
+      content: emailBody || `<pre>${emailText}</pre>`,
+      vendor,
+      amount,
+      receiptDate
+    });
     
     // Upload to Google Drive
     let driveUpload = null;
