@@ -1945,6 +1945,148 @@ app.get('/auth/status', (req, res) => {
   res.json({ authenticated: isAuthenticated });
 });
 
+// Convert individual email to PDF endpoint
+app.post('/convert-email-to-pdf', async (req, res) => {
+  try {
+    if (!req.session.googleTokens) {
+      return res.status(401).json({ error: 'Not authenticated with Google' });
+    }
+
+    const { emailId, emailContent } = req.body;
+    
+    if (!emailId) {
+      return res.status(400).json({ error: 'Email ID is required' });
+    }
+
+    console.log(`=== CONVERTING EMAIL ${emailId} TO PDF ===`);
+    
+    // Set credentials
+    oauth2Client.setCredentials(req.session.googleTokens);
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    
+    // Get full email content
+    const messageDetails = await gmail.users.messages.get({
+      userId: 'me',
+      id: emailId,
+      format: 'full'
+    });
+    
+    const message = messageDetails.data;
+    const headers = message.payload.headers || [];
+    
+    const subject = headers.find(h => h.name === 'Subject')?.value || 'No Subject';
+    const from = headers.find(h => h.name === 'From')?.value || 'Unknown Sender';
+    const date = headers.find(h => h.name === 'Date')?.value || new Date().toISOString();
+    
+    // Extract email body
+    let emailBody = '';
+    let emailText = '';
+    
+    function extractParts(parts) {
+      for (const part of parts) {
+        if (part.mimeType === 'text/html' && part.body?.data) {
+          const decodedBody = Buffer.from(part.body.data, 'base64').toString('utf-8');
+          if (decodedBody.length > emailBody.length) {
+            emailBody = decodedBody;
+          }
+        } else if (part.mimeType === 'text/plain' && part.body?.data) {
+          const decodedText = Buffer.from(part.body.data, 'base64').toString('utf-8');
+          if (decodedText.length > emailText.length) {
+            emailText = decodedText;
+          }
+        } else if (part.parts) {
+          extractParts(part.parts);
+        }
+      }
+    }
+    
+    if (message.payload.parts) {
+      extractParts(message.payload.parts);
+    } else if (message.payload.body?.data) {
+      if (message.payload.mimeType === 'text/html') {
+        emailBody = Buffer.from(message.payload.body.data, 'base64').toString('utf-8');
+      } else {
+        emailText = Buffer.from(message.payload.body.data, 'base64').toString('utf-8');
+      }
+    }
+    
+    // Use HTML body if available, otherwise fall back to text
+    const content = emailBody || emailText;
+    
+    if (!content) {
+      return res.status(400).json({ error: 'No email content found' });
+    }
+    
+    console.log('Email content extracted, length:', content.length);
+    
+    // Extract vendor, amount, and date from email text
+    const textForParsing = emailText || emailBody.replace(/<[^>]*>/g, ' ');
+    const vendor = extractVendor(textForParsing);
+    const amount = extractAmount(textForParsing);
+    const receiptDate = extractEmailDate(textForParsing, subject, from);
+    
+    console.log('Extracted:', { vendor, amount, receiptDate });
+    
+    // Create output filename
+    let outputFilename = '';
+    if (vendor && amount) {
+      const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+      outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
+    } else {
+      const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+      outputFilename = `Email Receipt ${dateStr}.pdf`;
+    }
+    
+    // Convert to PDF
+    let pdfBuffer;
+    try {
+      pdfBuffer = await createEmailReceiptPDFWithPuppeteer({
+        subject,
+        from,
+        date,
+        content: emailBody || `<pre>${emailText}</pre>`,
+        vendor,
+        amount,
+        receiptDate
+      });
+    } catch (puppeteerError) {
+      console.log('Puppeteer failed, trying html-pdf fallback:', puppeteerError.message);
+      pdfBuffer = await createEmailReceiptPDF({
+        subject,
+        from,
+        date,
+        content: emailBody || `<pre>${emailText}</pre>`,
+        vendor,
+        amount,
+        receiptDate
+      });
+    }
+    
+    // Upload to Google Drive
+    let driveUpload = null;
+    try {
+      driveUpload = await uploadToGoogleDrive(pdfBuffer, outputFilename, receiptDate, req.session.googleTokens);
+      console.log('Google Drive upload result:', driveUpload);
+    } catch (driveError) {
+      console.error('Google Drive upload failed:', driveError);
+      driveUpload = { success: false, error: driveError.message };
+    }
+    
+    res.json({
+      success: true,
+      vendor,
+      amount,
+      receiptDate,
+      filename: outputFilename,
+      googleDrive: driveUpload
+    });
+    
+  } catch (error) {
+    console.error('Error converting email to PDF:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Token endpoint for extension
 app.get('/auth/token', (req, res) => {
   if (req.session.googleTokens) {
