@@ -7,9 +7,11 @@ const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
 const htmlPdf = require('html-pdf');
+const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+console.log('=== FORCING REDEPLOY - AUTH TOKEN ENDPOINT SHOULD BE AVAILABLE ===');
 
 // Track processed emails to prevent duplicates - persistent storage
 const PROCESSED_EMAILS_FILE = path.join(__dirname, 'processed_emails.json');
@@ -39,6 +41,7 @@ function saveProcessedEmails(emailIds) {
 // Initialize processed emails set
 const processedEmailIds = loadProcessedEmails();
 console.log(`Loaded ${processedEmailIds.size} previously processed email IDs`);
+console.log('Auth token endpoint available at /auth/token');
 
 // Google OAuth configuration
 const oauth2Client = new google.auth.OAuth2(
@@ -1178,19 +1181,42 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
       outputFilename = `Email Receipt ${dateStr}.pdf`;
     }
     
-    // Create a proper PDF receipt using html-pdf library
-    console.log(`    📋 Creating PDF receipt with html-pdf library...`);
+    // Create a proper PDF receipt - try Puppeteer first, fallback to html-pdf
+    console.log(`    📋 Creating PDF receipt...`);
     
-    const pdfBuffer = await createEmailReceiptPDF({
-      sender,
-      subject,
-      vendor: vendor || 'Not found',
-      amount: amount || 'Not found',
-      receiptDate: receiptDate || 'Not found',
-      emailContent: text.substring(0, 1500) // Include more content
-    });
+    let pdfBuffer = null;
+    let usedPuppeteer = false;
     
-    console.log(`    Generated PDF: ${pdfBuffer.length} bytes`);
+    try {
+      // Try Puppeteer first for best results
+      console.log(`    🚀 Attempting Puppeteer PDF generation...`);
+      pdfBuffer = await createEmailReceiptPDFWithPuppeteer({
+        sender,
+        subject,
+        vendor: vendor || 'Not found',
+        amount: amount || 'Not found',
+        receiptDate: receiptDate || 'Not found',
+        emailContent: text.substring(0, 1500),
+        htmlContent: htmlContent // Pass raw HTML for better rendering
+      });
+      usedPuppeteer = true;
+      console.log(`    ✅ Puppeteer PDF generation successful!`);
+    } catch (puppeteerError) {
+      console.log(`    ⚠️  Puppeteer failed, falling back to html-pdf: ${puppeteerError.message}`);
+      
+      // Fallback to html-pdf
+      pdfBuffer = await createEmailReceiptPDF({
+        sender,
+        subject,
+        vendor: vendor || 'Not found',
+        amount: amount || 'Not found',
+        receiptDate: receiptDate || 'Not found',
+        emailContent: text.substring(0, 1500)
+      });
+      console.log(`    📄 html-pdf fallback used`);
+    }
+    
+    console.log(`    Generated PDF: ${pdfBuffer.length} bytes (${usedPuppeteer ? 'Puppeteer' : 'html-pdf'})`);
     
     // Check if we got a valid PDF or text fallback
     const isPDF = pdfBuffer.toString('ascii', 0, 4) === '%PDF';
@@ -1477,7 +1503,180 @@ function parseEmailDate(dateStr) {
   return null;
 }
 
-// Create a professional PDF receipt using html-pdf library
+// Puppeteer PDF generation with resource limits and queue-ready structure
+async function createEmailReceiptPDFWithPuppeteer(data) {
+  let browser = null;
+  const timeout = 30000; // 30 second timeout
+  
+  try {
+    console.log(`    🚀 Starting Puppeteer PDF generation...`);
+    
+    // Launch browser with resource limits
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--disable-features=VizDisplayCompositor',
+        '--memory-pressure-off',
+        '--max-old-space-size=512', // Limit memory
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-default-apps',
+        '--disable-extensions',
+        '--disable-plugins',
+        '--disable-background-networking',
+        '--disable-web-security' // For loading external resources
+      ],
+      timeout: timeout
+    });
+    
+    console.log(`    📄 Browser launched, creating page...`);
+    
+    const page = await browser.newPage();
+    
+    // Set resource limits
+    await page.setDefaultTimeout(timeout);
+    await page.setViewport({
+      width: 800,
+      height: 1200,
+      deviceScaleFactor: 1,
+    });
+    
+    // Create email-like HTML for natural rendering
+    const emailHtml = createEmailHTML(data);
+    
+    console.log(`    📝 Setting page content...`);
+    await page.setContent(emailHtml, {
+      waitUntil: 'networkidle0',
+      timeout: timeout
+    });
+    
+    console.log(`    📋 Generating PDF...`);
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '20px',
+        bottom: '20px',
+        left: '20px',
+        right: '20px'
+      }
+    });
+    
+    console.log(`    ✅ Puppeteer PDF generated successfully: ${pdfBuffer.length} bytes`);
+    return pdfBuffer;
+    
+  } catch (error) {
+    console.error('    ❌ Puppeteer PDF generation failed:', error.message);
+    throw error;
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+        console.log(`    🔒 Browser closed`);
+      } catch (closeError) {
+        console.error('    ⚠️  Error closing browser:', closeError);
+      }
+    }
+  }
+}
+
+// Create natural email HTML for Puppeteer rendering
+function createEmailHTML(data) {
+  // Use the actual HTML content if available, otherwise create a clean email layout
+  const htmlContent = data.htmlContent || '';
+  
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Email Receipt</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: white;
+      color: #333;
+      line-height: 1.5;
+    }
+    .email-header {
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #666;
+    }
+    .email-subject {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin: 10px 0;
+    }
+    .receipt-badge {
+      background: #f0f9ff;
+      border: 1px solid #0ea5e9;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin: 10px 0;
+      font-size: 12px;
+      color: #0369a1;
+      display: inline-block;
+    }
+    .email-content {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .email-content table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .email-content td {
+      padding: 8px;
+      vertical-align: top;
+    }
+    .email-content img {
+      max-width: 100%;
+      height: auto;
+    }
+    /* Gmail-specific styles */
+    .gmail_default {
+      font-family: arial, sans-serif;
+    }
+    /* Outlook-specific styles */
+    .outlook_default {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    /* Clean up common email artifacts */
+    .email-content * {
+      max-width: 100% !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="email-header">
+    <div><strong>From:</strong> ${data.sender}</div>
+    <div><strong>Date:</strong> ${new Date().toLocaleDateString()}</div>
+  </div>
+  
+  <div class="email-subject">${data.subject}</div>
+  
+  <div class="receipt-badge">
+    📧 ${data.vendor} • ${data.amount} • ${data.receiptDate}
+  </div>
+  
+  <div class="email-content">
+    ${htmlContent || data.emailContent.replace(/\n/g, '<br>')}
+  </div>
+</body>
+</html>`;
+}
+
+// Create a professional PDF receipt using html-pdf library (fallback)
 async function createEmailReceiptPDF(data) {
   try {
     console.log(`    Generating HTML for PDF conversion...`);
@@ -1744,6 +1943,17 @@ app.get('/auth/google/callback', async (req, res) => {
 app.get('/auth/status', (req, res) => {
   const isAuthenticated = !!(req.session.googleTokens);
   res.json({ authenticated: isAuthenticated });
+});
+
+// Token endpoint for extension
+app.get('/auth/token', (req, res) => {
+  if (req.session.googleTokens) {
+    res.json({
+      access_token: req.session.googleTokens.access_token
+    });
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
 });
 
 // Create Google Drive folder and upload file
