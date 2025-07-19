@@ -2190,43 +2190,41 @@ app.post('/convert-email-to-pdf', async (req, res) => {
       </html>
     `;
     
-    // Convert HTML to PDF using Puppeteer
-    let pdfBuffer;
-    if (puppeteer) {
-      console.log('Using Puppeteer for PDF generation');
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
-      const page = await browser.newPage();
-      await page.setContent(htmlContent);
-      pdfBuffer = await page.pdf({ 
-        format: 'A4',
-        margin: {
-          top: '0.5in',
-          right: '0.5in',
-          bottom: '0.5in',
-          left: '0.5in'
-        }
-      });
-      await browser.close();
-    } else {
-      console.log('Puppeteer not available, using html-pdf fallback');
-      pdfBuffer = await new Promise((resolve, reject) => {
-        htmlPdf.create(htmlContent, { 
+    // Convert HTML to PDF using Browserless.io
+    console.log('Using Browserless.io for PDF generation');
+    const browserlessToken = process.env.BROWSERLESS_TOKEN;
+    
+    if (!browserlessToken || browserlessToken === 'YOUR_BROWSERLESS_TOKEN') {
+      throw new Error('BROWSERLESS_TOKEN not configured');
+    }
+    
+    const response = await fetch('https://chrome.browserless.io/pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${browserlessToken}`
+      },
+      body: JSON.stringify({
+        html: htmlContent,
+        options: {
           format: 'A4',
-          border: {
+          margin: {
             top: '0.5in',
             right: '0.5in',
             bottom: '0.5in',
             left: '0.5in'
-          }
-        }).toBuffer((err, buffer) => {
-          if (err) reject(err);
-          else resolve(buffer);
-        });
-      });
+          },
+          printBackground: true
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Browserless API error: ${response.status} - ${errorText}`);
     }
+    
+    const pdfBuffer = await response.buffer();
     
     // Create filename
     const date = new Date().toISOString().split('T')[0];
