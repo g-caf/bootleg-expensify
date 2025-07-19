@@ -24,7 +24,6 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "popup.html",
     "default_title": "Expense Gadget"
   },
   "icons": {
