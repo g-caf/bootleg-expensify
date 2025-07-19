@@ -230,8 +230,14 @@ class ExpenseGadget {
         
         // Gmail scan button
         const gmailScanBtn = document.getElementById('gmailScanBtn');
-        gmailScanBtn.addEventListener('click', () => {
-            this.scanGmail();
+        gmailScanBtn.addEventListener('click', async () => {
+            if (gmailScanBtn.textContent === 'Connect to Google') {
+                // Handle connection
+                await this.connectGoogleDrive();
+            } else {
+                // Handle scanning
+                this.scanGmail();
+            }
         });
 
         // Search input
@@ -551,6 +557,20 @@ class ExpenseGadget {
                 ? 'Search your email for receipts...'
                 : 'Connect to Google to enable search';
         }
+        
+        // Update scan button based on authentication status
+        const gmailScanBtn = document.getElementById('gmailScanBtn');
+        if (gmailScanBtn) {
+            if (isAuthenticated) {
+                gmailScanBtn.textContent = 'Scan Gmail';
+                gmailScanBtn.className = 'scan-btn';
+                gmailScanBtn.disabled = false;
+            } else {
+                gmailScanBtn.textContent = 'Connect to Google';
+                gmailScanBtn.className = 'scan-btn connect';
+                gmailScanBtn.disabled = false;
+            }
+        }
     }
 
     connectGoogleDrive() {
@@ -593,15 +613,10 @@ class ExpenseGadget {
         console.log('=== GMAIL SCAN STARTED ===');
         
         const gmailScanBtn = document.getElementById('gmailScanBtn');
-        const scanResults = document.getElementById('scanResults');
         
         // Disable button and show loading
         gmailScanBtn.disabled = true;
         gmailScanBtn.textContent = 'Scanning...';
-        
-        // Show results section
-        scanResults.style.display = 'block';
-        scanResults.innerHTML = '<div style="color: #6b7280;">🔍 Scanning your email for order confirmations...</div>';
         
         try {
             const response = await fetch('https://bootleg-expensify.onrender.com/scan-gmail', {
@@ -619,10 +634,7 @@ class ExpenseGadget {
             const result = await response.json();
             console.log('Gmail scan result:', result);
             
-            // Update results display
-            this.displayScanResults(result);
-            
-            // Show success message
+            // Show success message only
             if (result.receiptsProcessed > 0) {
                 this.showStatus(`✅ Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails!`, 'success');
             } else if (result.receiptsFound > 0) {
@@ -633,7 +645,6 @@ class ExpenseGadget {
             
         } catch (error) {
             console.error('Gmail scan error:', error);
-            scanResults.innerHTML = `<div style="color: #dc2626;">❌ Error scanning Gmail: ${error.message}</div>`;
             this.showStatus('❌ Failed to scan Gmail. Check your connection.', 'error');
         } finally {
             // Re-enable button
@@ -642,39 +653,7 @@ class ExpenseGadget {
         }
     }
 
-    displayScanResults(result) {
-        const scanResults = document.getElementById('scanResults');
-        
-        if (result.results.length === 0) {
-            scanResults.innerHTML = '<div style="color: #6b7280;">No order confirmation emails found in recent emails</div>';
-            return;
-        }
-        
-        let html = `<div style="font-weight: 500; margin-bottom: 8px;">📧 Found ${result.receiptsFound} emails, processed ${result.receiptsProcessed} receipts:</div>`;
-        
-        result.results.forEach(item => {
-            const status = item.processed ? '✅' : '❌';
-            const statusClass = item.processed ? 'scan-result-success' : 'scan-result-error';
-            
-            html += `<div class="scan-result-item">`;
-            html += `<div class="${statusClass}">${status} ${item.filename || 'Email receipt'}</div>`;
-            
-            if (item.processed) {
-                html += `<div style="font-size: 11px; color: #6b7280; margin-left: 16px;">`;
-                html += `${item.vendor || 'Unknown'} • $${item.amount || '?'} • ${item.receiptDate || 'No date'}`;
-                if (item.googleDrive && item.googleDrive.success) {
-                    html += ` • 📁 ${item.googleDrive.monthFolder}`;
-                }
-                html += `</div>`;
-            } else if (item.error) {
-                html += `<div style="font-size: 11px; color: #dc2626; margin-left: 16px;">${item.error}</div>`;
-            }
-            
-            html += `</div>`;
-        });
-        
-        scanResults.innerHTML = html;
-    }
+
 
     handleSearchInput(query) {
         // Clear previous debounce timer
