@@ -966,8 +966,8 @@ app.post('/scan-gmail', async (req, res) => {
       '-subject:Shipped: -subject:Delivered: -subject:"Out for delivery" -subject:"Your package"',
       // Exclude refunds and cancellations
       '-subject:refund -subject:cancelled -subject:canceled -subject:"order cancelled"',
-      // Use date range - from X days ago to Y days ago
-      `newer_than:${fromDays}d older_than:${toDays}d`
+      // Use date range - from X days ago to Y days ago (handle today = 0)
+      toDays === 0 ? `newer_than:${fromDays}d` : `newer_than:${fromDays}d older_than:${toDays}d`
     ].join(' ');
     
     console.log('Gmail search query:', query);

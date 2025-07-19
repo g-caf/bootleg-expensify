@@ -305,19 +305,47 @@
             font-weight: 600;
         }
         
-        .date-slider {
-            width: 100%;
+        /* Dual Range Slider Styles */
+        .dual-range-container {
+            position: relative;
+            height: 20px;
+            margin: 8px 0;
+        }
+        
+        .dual-range-track {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
             height: 4px;
             background: #4b5563;
             border-radius: 2px;
+            transform: translateY(-50%);
+        }
+        
+        .dual-range-progress {
+            position: absolute;
+            top: 50%;
+            height: 4px;
+            background: #f44e40;
+            border-radius: 2px;
+            transform: translateY(-50%);
+        }
+        
+        .dual-range-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            background: transparent;
+            pointer-events: none;
+            -webkit-appearance: none;
+            appearance: none;
             outline: none;
-            margin: 8px 0;
-            cursor: pointer;
-            -webkit-appearance: none;
-            appearance: none;
         }
         
-        .date-slider::-webkit-slider-thumb {
+        .dual-range-input::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
             width: 16px;
@@ -327,9 +355,12 @@
             cursor: pointer;
             border: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            pointer-events: all;
+            position: relative;
+            z-index: 2;
         }
         
-        .date-slider::-moz-range-thumb {
+        .dual-range-input::-moz-range-thumb {
             width: 16px;
             height: 16px;
             background: #f44e40;
@@ -337,6 +368,16 @@
             cursor: pointer;
             border: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            pointer-events: all;
+        }
+        
+        /* Different colors for the two handles */
+        .dual-range-input:first-of-type::-webkit-slider-thumb {
+            background: #10b981; /* Green for "from" (today) */
+        }
+        
+        .dual-range-input:last-of-type::-webkit-slider-thumb {
+            background: #f44e40; /* Red for "to" (days ago) */
         }
         
         .range-labels {
@@ -373,27 +414,20 @@
             <div class="date-range-container" id="dateRangeContainer" style="display: none;">
                 <div class="range-header">
                     <label>Scan from:</label>
-                    <span id="dayDisplay">7 to 1 days ago</span>
+                    <span id="dayDisplay">today to 7 days ago</span>
                 </div>
                 
-                <!-- "From" slider (oldest date) -->
-                <div style="margin-bottom: 8px;">
-                    <label style="font-size: 11px; color: #9ca3af; margin-bottom: 4px; display: block;">From (days ago):</label>
-                    <input type="range" id="dayRangeFrom" min="1" max="90" value="7" class="date-slider">
-                    <div class="range-labels">
-                        <span>1d ago</span>
-                        <span>90d ago</span>
-                    </div>
+                <!-- Dual-handle range slider -->
+                <div class="dual-range-container">
+                    <div class="dual-range-track"></div>
+                    <div class="dual-range-progress" id="rangeProgress"></div>
+                    <input type="range" id="dayRangeMin" min="0" max="90" value="0" class="dual-range-input">
+                    <input type="range" id="dayRangeMax" min="0" max="90" value="7" class="dual-range-input">
                 </div>
                 
-                <!-- "To" slider (newest date) -->
-                <div>
-                    <label style="font-size: 11px; color: #9ca3af; margin-bottom: 4px; display: block;">To (days ago):</label>
-                    <input type="range" id="dayRangeTo" min="1" max="90" value="1" class="date-slider">
-                    <div class="range-labels">
-                        <span>1d ago</span>
-                        <span>90d ago</span>
-                    </div>
+                <div class="range-labels">
+                    <span>Today</span>
+                    <span>90d ago</span>
                 </div>
             </div>
             

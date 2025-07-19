@@ -224,9 +224,10 @@ class ExpenseGadget {
     setupEventListeners() {
         const closeBtn = document.getElementById('closeBtn');
         const searchInput = document.getElementById('searchInput');
-        const dayRangeFrom = document.getElementById('dayRangeFrom');
-        const dayRangeTo = document.getElementById('dayRangeTo');
+        const dayRangeMin = document.getElementById('dayRangeMin'); // "from" - newer date (0 = today)
+        const dayRangeMax = document.getElementById('dayRangeMax'); // "to" - older date (7 = 7 days ago)
         const dayDisplay = document.getElementById('dayDisplay');
+        const rangeProgress = document.getElementById('rangeProgress');
 
         // Close button
         closeBtn.addEventListener('click', () => {
@@ -236,19 +237,34 @@ class ExpenseGadget {
         // Reset sliders to default values on popup load
         this.resetDateRangeSliders();
 
-        // Date range sliders with auto-scan
+        // Dual range slider with auto-scan
         let scanTimeout = null;
         const updateRangeDisplay = () => {
-            const fromDays = parseInt(dayRangeFrom.value);
-            const toDays = parseInt(dayRangeTo.value);
+            const minVal = parseInt(dayRangeMin.value); // Days from today (0 = today)
+            const maxVal = parseInt(dayRangeMax.value); // Days ago (7 = 7 days ago)
             
-            // Ensure "from" is always >= "to" (from is older, to is newer)
-            if (fromDays < toDays) {
-                dayRangeFrom.value = toDays;
-                fromDays = toDays;
+            // Ensure min <= max (today or recent <= older days ago)
+            if (minVal > maxVal) {
+                if (dayRangeMin === document.activeElement) {
+                    dayRangeMax.value = minVal;
+                } else {
+                    dayRangeMin.value = maxVal;
+                }
             }
             
-            dayDisplay.textContent = `${fromDays} to ${toDays} days ago`;
+            const finalMin = Math.min(minVal, maxVal);
+            const finalMax = Math.max(minVal, maxVal);
+            
+            // Update display text
+            const fromText = finalMin === 0 ? 'today' : `${finalMin} day${finalMin > 1 ? 's' : ''} ago`;
+            const toText = `${finalMax} day${finalMax > 1 ? 's' : ''} ago`;
+            dayDisplay.textContent = `${fromText} to ${toText}`;
+            
+            // Update progress bar
+            const progressLeft = (finalMin / 90) * 100;
+            const progressWidth = ((finalMax - finalMin) / 90) * 100;
+            rangeProgress.style.left = `${progressLeft}%`;
+            rangeProgress.style.width = `${progressWidth}%`;
             
             // Auto-scan after user stops moving sliders (debounced)
             if (scanTimeout) clearTimeout(scanTimeout);
@@ -259,8 +275,8 @@ class ExpenseGadget {
             }
         };
 
-        dayRangeFrom.addEventListener('input', updateRangeDisplay);
-        dayRangeTo.addEventListener('input', updateRangeDisplay);
+        dayRangeMin.addEventListener('input', updateRangeDisplay);
+        dayRangeMax.addEventListener('input', updateRangeDisplay);
         
         // Gmail scan button
         const gmailScanBtn = document.getElementById('gmailScanBtn');
@@ -547,14 +563,21 @@ class ExpenseGadget {
     }
 
     resetDateRangeSliders() {
-        const dayRangeFrom = document.getElementById('dayRangeFrom');
-        const dayRangeTo = document.getElementById('dayRangeTo');
+        const dayRangeMin = document.getElementById('dayRangeMin');
+        const dayRangeMax = document.getElementById('dayRangeMax');
         const dayDisplay = document.getElementById('dayDisplay');
+        const rangeProgress = document.getElementById('rangeProgress');
         
-        // Reset to default values: scan last 7 days (from 7 days ago to 1 day ago)
-        dayRangeFrom.value = '7';
-        dayRangeTo.value = '1';
-        dayDisplay.textContent = '7 to 1 days ago';
+        // Reset to default values: from today (0) to 7 days ago (7)
+        dayRangeMin.value = '0'; // Today
+        dayRangeMax.value = '7'; // 7 days ago
+        dayDisplay.textContent = 'today to 7 days ago';
+        
+        // Update progress bar
+        const progressLeft = 0; // 0% from left
+        const progressWidth = (7 / 90) * 100; // 7 days out of 90
+        rangeProgress.style.left = `${progressLeft}%`;
+        rangeProgress.style.width = `${progressWidth}%`;
     }
 
     showDateRangeSlider() {
@@ -621,13 +644,13 @@ class ExpenseGadget {
         const gmailScanBtn = document.getElementById('gmailScanBtn');
         const searchResults = document.getElementById('searchResults');
         const loading = document.getElementById('loading');
-        const dayRangeFrom = document.getElementById('dayRangeFrom');
-        const dayRangeTo = document.getElementById('dayRangeTo');
+        const dayRangeMin = document.getElementById('dayRangeMin');
+        const dayRangeMax = document.getElementById('dayRangeMax');
         
         // Get selected date range
-        const fromDays = parseInt(dayRangeFrom.value);
-        const toDays = parseInt(dayRangeTo.value);
-        console.log(`Scanning from ${fromDays} to ${toDays} days ago`);
+        const minDays = parseInt(dayRangeMin.value); // From (0 = today)
+        const maxDays = parseInt(dayRangeMax.value); // To (7 = 7 days ago)
+        console.log(`Scanning from ${minDays === 0 ? 'today' : minDays + ' days ago'} to ${maxDays} days ago`);
         
         // Clear search results and show loading
         searchResults.innerHTML = '';
@@ -647,8 +670,8 @@ class ExpenseGadget {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    dayRangeFrom: fromDays,
-                    dayRangeTo: toDays
+                    dayRangeFrom: maxDays, // Server expects "from" as older date
+                    dayRangeTo: minDays    // Server expects "to" as newer date
                 })
             });
             
