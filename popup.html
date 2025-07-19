@@ -260,7 +260,7 @@
         
         .loading {
             position: absolute;
-            top: 50%;
+            top: 70%;
             left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
@@ -268,6 +268,27 @@
             color: #d1d5db;
             display: none;
             z-index: 10;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .loading.show {
+            display: flex;
+        }
+        
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #4b5563;
+            border-top: 2px solid #f44e40;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         
         /* Date Range Slider Styles */
@@ -371,13 +392,13 @@
             pointer-events: all;
         }
         
-        /* Different colors for the two handles */
+        /* Both handles should be red */
         .dual-range-input:first-of-type::-webkit-slider-thumb {
-            background: #10b981; /* Green for "from" (today) */
+            background: #f44e40; /* Red for both handles */
         }
         
         .dual-range-input:last-of-type::-webkit-slider-thumb {
-            background: #f44e40; /* Red for "to" (days ago) */
+            background: #f44e40; /* Red for both handles */
         }
         
         .range-labels {
@@ -402,7 +423,10 @@
     
     <div class="main-content">
         <div class="status" id="status"></div>
-        <div class="loading" id="loading">🔍 Scanning your email...</div>
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            Looking for receipts...
+        </div>
         
         <div class="search-section">
             <div class="search-bar-container">
@@ -414,7 +438,7 @@
             <div class="date-range-container" id="dateRangeContainer" style="display: none;">
                 <div class="range-header">
                     <label>Scan from:</label>
-                    <span id="dayDisplay">today to 7 days ago</span>
+                    <span id="dayDisplay">today to 90 days ago</span>
                 </div>
                 
                 <!-- Dual-handle range slider -->
@@ -422,7 +446,7 @@
                     <div class="dual-range-track"></div>
                     <div class="dual-range-progress" id="rangeProgress"></div>
                     <input type="range" id="dayRangeMin" min="0" max="90" value="0" class="dual-range-input">
-                    <input type="range" id="dayRangeMax" min="0" max="90" value="7" class="dual-range-input">
+                    <input type="range" id="dayRangeMax" min="0" max="90" value="90" class="dual-range-input">
                 </div>
                 
                 <div class="range-labels">

@@ -568,14 +568,14 @@ class ExpenseGadget {
         const dayDisplay = document.getElementById('dayDisplay');
         const rangeProgress = document.getElementById('rangeProgress');
         
-        // Reset to default values: from today (0) to 7 days ago (7)
+        // Reset to default values: from today (0) to 90 days ago (90)
         dayRangeMin.value = '0'; // Today
-        dayRangeMax.value = '7'; // 7 days ago
-        dayDisplay.textContent = 'today to 7 days ago';
+        dayRangeMax.value = '90'; // 90 days ago (very end)
+        dayDisplay.textContent = 'today to 90 days ago';
         
         // Update progress bar
         const progressLeft = 0; // 0% from left
-        const progressWidth = (7 / 90) * 100; // 7 days out of 90
+        const progressWidth = 100; // Full width (today to 90 days ago)
         rangeProgress.style.left = `${progressLeft}%`;
         rangeProgress.style.width = `${progressWidth}%`;
     }
@@ -647,14 +647,14 @@ class ExpenseGadget {
         const dayRangeMin = document.getElementById('dayRangeMin');
         const dayRangeMax = document.getElementById('dayRangeMax');
         
-        // Get selected date range
-        const minDays = parseInt(dayRangeMin.value); // From (0 = today)
-        const maxDays = parseInt(dayRangeMax.value); // To (7 = 7 days ago)
-        console.log(`Scanning from ${minDays === 0 ? 'today' : minDays + ' days ago'} to ${maxDays} days ago`);
+        // Get selected date range (search backward from today)
+        const startDays = parseInt(dayRangeMin.value); // Start (0 = today)
+        const endDays = parseInt(dayRangeMax.value); // End (90 = 90 days ago)
+        console.log(`Scanning from ${startDays === 0 ? 'today' : startDays + ' days ago'} backward to ${endDays} days ago`);
         
         // Clear search results and show loading
         searchResults.innerHTML = '';
-        loading.style.display = 'block';
+        loading.classList.add('show');
         
         // Keep date range slider visible during scan
         
@@ -670,8 +670,8 @@ class ExpenseGadget {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    dayRangeFrom: maxDays, // Server expects "from" as older date
-                    dayRangeTo: minDays    // Server expects "to" as newer date
+                    dayRangeFrom: endDays,   // Server expects "from" as older date (90)
+                    dayRangeTo: startDays    // Server expects "to" as newer date (0)
                 })
             });
             
@@ -683,7 +683,7 @@ class ExpenseGadget {
             console.log('Gmail scan result:', result);
             
             // Hide loading
-            loading.style.display = 'none';
+            loading.classList.remove('show');
             
             // Show success message with date range info
             const rangeText = result.daySpan ? ` from ${result.dayRangeFrom} to ${result.dayRangeTo} days ago (${result.daySpan} day${result.daySpan > 1 ? 's' : ''})` : '';
@@ -697,7 +697,7 @@ class ExpenseGadget {
             
         } catch (error) {
             console.error('Gmail scan error:', error);
-            loading.style.display = 'none';
+            loading.classList.remove('show');
             this.showStatus('Failed to scan Gmail. Check your connection.');
         } finally {
             // Re-enable button and reset to scan state
