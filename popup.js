@@ -188,14 +188,19 @@ class ExpenseGadget {
     }
 
     async init() {
+        console.log('=== INITIALIZING EXPENSE GADGET ===');
         this.setupEventListeners();
         // Initialize Gmail client after everything else is set up
         try {
+            console.log('Creating Gmail client...');
             this.gmailClient = new GmailClient();
+            console.log('Gmail client created successfully');
         } catch (error) {
             console.error('Failed to initialize Gmail client:', error);
         }
+        console.log('Checking Gmail authentication...');
         await this.checkGmailAuth();
+        console.log('=== EXPENSE GADGET INITIALIZED ===');
     }
 
     setupEventListeners() {
@@ -435,9 +440,20 @@ class ExpenseGadget {
 
 
     async checkGmailAuth() {
-        const isAuthenticated = await this.gmailClient.checkStoredAuth();
-        this.updateGmailAuthStatus(isAuthenticated);
-        return isAuthenticated;
+        try {
+            if (!this.gmailClient) {
+                console.error('Gmail client not initialized');
+                this.updateGmailAuthStatus(false);
+                return false;
+            }
+            const isAuthenticated = await this.gmailClient.checkStoredAuth();
+            this.updateGmailAuthStatus(isAuthenticated);
+            return isAuthenticated;
+        } catch (error) {
+            console.error('Error checking Gmail auth:', error);
+            this.updateGmailAuthStatus(false);
+            return false;
+        }
     }
 
     async authenticateGmail() {
@@ -501,7 +517,7 @@ class ExpenseGadget {
         
         // Check Gmail auth status periodically to see when authentication completes
         const checkInterval = setInterval(async () => {
-            const isAuthenticated = await this.gmailClient.checkAuthentication();
+            const isAuthenticated = await this.gmailClient.checkStoredAuth();
             if (isAuthenticated) {
                 clearInterval(checkInterval);
                 this.showStatus('✅ Google account connected successfully!', 'success');
