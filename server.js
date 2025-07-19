@@ -940,6 +940,11 @@ app.post('/scan-gmail', async (req, res) => {
 
     console.log('=== GMAIL SCAN STARTED ===');
     
+    // Extract dayRange from request body
+    const { dayRange } = req.body;
+    const daysToScan = dayRange || 30; // Default to 30 days if not provided
+    console.log(`Scanning last ${daysToScan} days`);
+    
     // Set credentials
     oauth2Client.setCredentials(req.session.googleTokens);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
@@ -960,16 +965,20 @@ app.post('/scan-gmail', async (req, res) => {
       '-subject:Shipped: -subject:Delivered: -subject:"Out for delivery" -subject:"Your package"',
       // Exclude refunds and cancellations
       '-subject:refund -subject:cancelled -subject:canceled -subject:"order cancelled"',
-      // Last 30 days
-      'newer_than:30d'
+      // Use dynamic date range
+      `newer_than:${daysToScan}d`
     ].join(' ');
     
     console.log('Gmail search query:', query);
     
+    // Scale maxResults based on date range - more days = more potential emails
+    const maxResults = Math.min(250, Math.max(25, daysToScan * 5)); // 5 emails per day on average, max 250
+    console.log(`Using maxResults: ${maxResults} for ${daysToScan} days`);
+    
     const searchResponse = await gmail.users.messages.list({
       userId: 'me',
       q: query,
-      maxResults: 50
+      maxResults: maxResults
     });
     
     if (!searchResponse.data.messages) {
@@ -978,6 +987,7 @@ app.post('/scan-gmail', async (req, res) => {
         success: true, 
         receiptsFound: 0, 
         receiptsProcessed: 0,
+        dayRange: daysToScan,
         results: []
       });
     }
@@ -1087,6 +1097,7 @@ app.post('/scan-gmail', async (req, res) => {
       success: true,
       receiptsFound: searchResponse.data.messages.length,
       receiptsProcessed: processedCount,
+      dayRange: daysToScan,
       results: results
     });
     
