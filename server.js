@@ -7,7 +7,13 @@ const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
 const htmlPdf = require('html-pdf');
-const puppeteer = require('puppeteer');
+// Optional puppeteer import - fallback gracefully if not available
+let puppeteer = null;
+try {
+  puppeteer = require('puppeteer');
+} catch (error) {
+  console.warn('Puppeteer not available:', error.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 10000;
