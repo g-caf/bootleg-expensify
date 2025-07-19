@@ -1,33 +1,20 @@
-// IMMEDIATE TEST - popup.js loading
+// Simple popup.js loading
 console.log('=== POPUP.JS STARTING ===');
 
-// Check if running in proper context
-if (typeof chrome === 'undefined') {
-    console.error('Chrome APIs not available');
-} else {
-    console.log('Chrome runtime available:', !!chrome.runtime);
-}
-
-// DOM ready check
-if (document.readyState === 'loading') {
-    console.log('DOM still loading, waiting...');
-    document.addEventListener('DOMContentLoaded', initializeExtension);
-} else {
-    console.log('DOM already loaded, initializing immediately');
-    initializeExtension();
-}
-
-function initializeExtension() {
-    console.log('=== INITIALIZING EXTENSION ===');
+// Simple DOM ready approach
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM ready, creating ExpenseGadget...');
+    
     try {
-        const expenseGadget = new ExpenseGadget();
-        console.log('ExpenseGadget created successfully');
-        expenseGadget.init();
-        console.log('ExpenseGadget initialized successfully');
+        window.expenseGadget = new ExpenseGadget();
+        console.log('ExpenseGadget created');
+        
+        window.expenseGadget.init();
+        console.log('ExpenseGadget initialized');
     } catch (error) {
-        console.error('Failed to create ExpenseGadget:', error);
+        console.error('ExpenseGadget error:', error);
     }
-}
+});
 
 // Gmail API client for browser extension
 class GmailClient {
