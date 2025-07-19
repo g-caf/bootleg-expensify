@@ -329,7 +329,7 @@
         /* Dual Range Slider Styles */
         .dual-range-container {
             position: relative;
-            height: 20px;
+            height: 24px;
             margin: 8px 0;
         }
         
@@ -358,12 +358,14 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 20px;
+            height: 24px;
             background: transparent;
             pointer-events: none;
             -webkit-appearance: none;
             appearance: none;
             outline: none;
+            margin: 0;
+            padding: 0;
         }
         
         .dual-range-input::-webkit-slider-thumb {
@@ -378,7 +380,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             pointer-events: all;
             position: relative;
-            z-index: 2;
+            top: -6px; /* Center on the 4px track */
         }
         
         .dual-range-input::-webkit-slider-runnable-track {
@@ -386,6 +388,7 @@
             height: 4px;
             background: transparent;
             border: none;
+            border-radius: 2px;
         }
         
         .dual-range-input::-moz-range-thumb {
@@ -397,15 +400,15 @@
             border: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             pointer-events: all;
+            position: relative;
         }
         
-        /* Both handles should be red */
-        .dual-range-input:first-of-type::-webkit-slider-thumb {
-            background: #f44e40; /* Red for both handles */
-        }
-        
-        .dual-range-input:last-of-type::-webkit-slider-thumb {
-            background: #f44e40; /* Red for both handles */
+        .dual-range-input::-moz-range-track {
+            width: 100%;
+            height: 4px;
+            background: transparent;
+            border: none;
+            border-radius: 2px;
         }
         
         .range-labels {
