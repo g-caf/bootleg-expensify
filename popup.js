@@ -200,11 +200,6 @@ class ExpenseGadget {
             console.log('Creating Gmail client...');
             this.gmailClient = new GmailClient();
             console.log('Gmail client created successfully');
-            
-            // Clear any stale authentication state on startup
-            console.log('Clearing any stale authentication data...');
-            await this.gmailClient.logout();
-            
         } catch (error) {
             console.error('Failed to initialize Gmail client:', error);
         }
