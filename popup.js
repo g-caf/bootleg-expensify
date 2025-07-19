@@ -238,6 +238,16 @@ class ExpenseGadget {
         searchInput.addEventListener('input', (e) => {
             this.handleSearchInput(e.target.value);
         });
+        
+        // Event delegation for convert buttons (dynamically created)
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('convert-btn')) {
+                const emailId = e.target.getAttribute('data-email-id');
+                if (emailId) {
+                    this.convertEmailToPdf(emailId, e.target);
+                }
+            }
+        });
     }
 
     setupTabs() {
@@ -730,7 +740,7 @@ class ExpenseGadget {
             html += `<div class="search-result-date">${this.formatDate(date)}</div>`;
             html += `</div>`;
             html += `<div class="search-result-from">From: ${this.escapeHtml(from)}</div>`;
-            html += `<button class="convert-btn" onclick="expenseGadget.convertEmailToPdf('${emailId}', this)">Convert to PDF</button>`;
+            html += `<button class="convert-btn" data-email-id="${emailId}">Convert to PDF</button>`;
             html += `</div>`;
         });
         
