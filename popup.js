@@ -201,13 +201,19 @@ class ExpenseGadget {
     setupEventListeners() {
         const closeBtn = document.getElementById('closeBtn');
         const searchInput = document.getElementById('searchInput');
+        const dayRange = document.getElementById('dayRange');
+        const dayDisplay = document.getElementById('dayDisplay');
 
         // Close button
         closeBtn.addEventListener('click', () => {
             window.close();
         });
 
-
+        // Date range slider
+        dayRange.addEventListener('input', (e) => {
+            const days = parseInt(e.target.value);
+            dayDisplay.textContent = `${days} day${days > 1 ? 's' : ''}`;
+        });
         
         // Gmail scan button
         const gmailScanBtn = document.getElementById('gmailScanBtn');
@@ -215,8 +221,11 @@ class ExpenseGadget {
             if (gmailScanBtn.textContent === 'Connect to Google') {
                 // Handle connection
                 await this.connectGoogleDrive();
+            } else if (gmailScanBtn.textContent === 'Scan Gmail') {
+                // Show date range slider
+                this.showDateRangeSlider();
             } else {
-                // Handle scanning
+                // Handle scanning with selected date range
                 this.scanGmail();
             }
         });
@@ -471,6 +480,20 @@ class ExpenseGadget {
         }
     }
 
+    showDateRangeSlider() {
+        const dateRangeContainer = document.getElementById('dateRangeContainer');
+        const gmailScanBtn = document.getElementById('gmailScanBtn');
+        
+        // Show the slider with animation
+        dateRangeContainer.style.display = 'block';
+        // Force reflow for animation
+        dateRangeContainer.offsetHeight;
+        dateRangeContainer.classList.add('show');
+        
+        // Update button text
+        gmailScanBtn.textContent = 'Start Scan';
+    }
+
     connectGoogleDrive() {
         // Open Google authentication in new tab
         const authUrl = 'https://bootleg-expensify.onrender.com/auth/google';
@@ -516,10 +539,22 @@ class ExpenseGadget {
         const gmailScanBtn = document.getElementById('gmailScanBtn');
         const searchResults = document.getElementById('searchResults');
         const loading = document.getElementById('loading');
+        const dayRange = document.getElementById('dayRange');
+        const dateRangeContainer = document.getElementById('dateRangeContainer');
+        
+        // Get selected date range
+        const selectedDays = parseInt(dayRange.value);
+        console.log(`Scanning last ${selectedDays} days`);
         
         // Clear search results and show loading
         searchResults.innerHTML = '';
         loading.style.display = 'block';
+        
+        // Hide date range slider
+        dateRangeContainer.classList.remove('show');
+        setTimeout(() => {
+            dateRangeContainer.style.display = 'none';
+        }, 300);
         
         // Disable button and show loading
         gmailScanBtn.disabled = true;
@@ -531,7 +566,10 @@ class ExpenseGadget {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json'
-                }
+                },
+                body: JSON.stringify({
+                    dayRange: selectedDays
+                })
             });
             
             if (!response.ok) {
@@ -544,13 +582,14 @@ class ExpenseGadget {
             // Hide loading
             loading.style.display = 'none';
             
-            // Show success message only
+            // Show success message with day range info
+            const dayText = result.dayRange ? ` in last ${result.dayRange} day${result.dayRange > 1 ? 's' : ''}` : '';
             if (result.receiptsProcessed > 0) {
-                this.showStatus(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails!`);
+                this.showStatus(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails${dayText}!`);
             } else if (result.receiptsFound > 0) {
-                this.showStatus(`Found ${result.receiptsFound} potential receipt emails, but couldn't process them`);
+                this.showStatus(`Found ${result.receiptsFound} potential receipt emails${dayText}, but couldn't process them`);
             } else {
-                this.showStatus('No recent order confirmation emails found');
+                this.showStatus(`No receipt emails found${dayText}`);
             }
             
         } catch (error) {
@@ -558,7 +597,7 @@ class ExpenseGadget {
             loading.style.display = 'none';
             this.showStatus('Failed to scan Gmail. Check your connection.');
         } finally {
-            // Re-enable button
+            // Re-enable button and reset to initial state
             gmailScanBtn.disabled = false;
             gmailScanBtn.textContent = 'Scan Gmail';
         }

@@ -270,10 +270,82 @@
             z-index: 10;
         }
         
-
+        /* Date Range Slider Styles */
+        .date-range-container {
+            background: #374151;
+            border: 1px solid #4b5563;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(-10px);
+        }
         
-
+        .date-range-container.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
         
+        .range-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        
+        .range-header label {
+            color: #d1d5db;
+            font-weight: 500;
+        }
+        
+        .range-header span {
+            color: #f44e40;
+            font-weight: 600;
+        }
+        
+        .date-slider {
+            width: 100%;
+            height: 4px;
+            background: #4b5563;
+            border-radius: 2px;
+            outline: none;
+            margin: 8px 0;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        
+        .date-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #f44e40;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .date-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #f44e40;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .range-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
 
     </style>
 </head>
@@ -296,6 +368,20 @@
                 <input type="text" class="search-input" id="searchInput" placeholder="Search your email for receipts...">
                 <button class="scan-btn" id="gmailScanBtn" disabled>Connect to Google</button>
             </div>
+            
+            <!-- Date range slider (initially hidden) -->
+            <div class="date-range-container" id="dateRangeContainer" style="display: none;">
+                <div class="range-header">
+                    <label>Scan last:</label>
+                    <span id="dayDisplay">7 days</span>
+                </div>
+                <input type="range" id="dayRange" min="1" max="90" value="7" class="date-slider">
+                <div class="range-labels">
+                    <span>1d</span>
+                    <span>90d</span>
+                </div>
+            </div>
+            
             <div class="search-results" id="searchResults"></div>
         </div>
     </div>

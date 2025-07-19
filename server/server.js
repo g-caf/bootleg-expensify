@@ -934,36 +934,53 @@ app.post('/scan-gmail', async (req, res) => {
 
     console.log('=== GMAIL SCAN STARTED ===');
     
+    // Get date range from request (default to 7 days)
+    const dayRange = req.body.dayRange || 7;
+    console.log(`Scanning last ${dayRange} days`);
+    
     // Set credentials
     oauth2Client.setCredentials(req.session.googleTokens);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     
-    // Focused search for RECEIPTS (not delivery notifications) from Big 3 platforms
+    // Enhanced search for RECEIPTS with more comprehensive patterns
     const query = [
       '(',
-      // Amazon order confirmations (NOT deliveries)
-      'from:amazon.com (subject:"Ordered:" OR subject:"Order Confirmation" OR subject:"Your Amazon.com order")',
+      // Amazon order confirmations (NOT deliveries) - more patterns
+      'from:amazon.com (subject:"Ordered:" OR subject:"Order Confirmation" OR subject:"Your Amazon.com order" OR subject:"Order receipt")',
       ') OR (',
-      // DoorDash receipts
-      'from:doordash.com (subject:receipt OR subject:"Order confirmed" OR subject:"Your DoorDash receipt")',
+      // DoorDash receipts - enhanced patterns
+      'from:doordash.com (subject:receipt OR subject:"Order confirmed" OR subject:"Your DoorDash receipt" OR subject:"order total")',
       ') OR (',
-      // Instacart receipts  
-      'from:instacart.com (subject:receipt OR subject:"Your Instacart order receipt" OR subject:"Order receipt")',
+      // Instacart receipts - broader patterns
+      'from:instacart.com (subject:receipt OR subject:"Your Instacart order receipt" OR subject:"Order receipt" OR subject:"order complete")',
+      ') OR (',
+      // Additional platforms
+      'from:uber.com subject:receipt',
+      'from:grubhub.com (subject:receipt OR subject:"order confirmation")',
+      'from:starbucks.com subject:receipt',
+      'from:paypal.com subject:"You sent a payment"',
       ')',
-      // Exclude delivery/shipping notifications
+      // Enhanced exclusions
       '-subject:Shipped: -subject:Delivered: -subject:"Out for delivery" -subject:"Your package"',
-      // Exclude refunds and cancellations
       '-subject:refund -subject:cancelled -subject:canceled -subject:"order cancelled"',
-      // Last 30 days
-      'newer_than:30d'
+      '-subject:"tracking" -subject:"shipment"',
+      // Dynamic date range
+      `newer_than:${dayRange}d`
     ].join(' ');
     
     console.log('Gmail search query:', query);
     
+    // Scale search results based on date range
+    const maxResults = dayRange <= 7 ? 30 : 
+                      dayRange <= 30 ? 50 : 
+                      dayRange <= 90 ? 100 : 150;
+    
+    console.log(`Searching with maxResults: ${maxResults} for ${dayRange} days`);
+    
     const searchResponse = await gmail.users.messages.list({
       userId: 'me',
       q: query,
-      maxResults: 50
+      maxResults: maxResults
     });
     
     if (!searchResponse.data.messages) {
@@ -972,21 +989,22 @@ app.post('/scan-gmail', async (req, res) => {
         success: true, 
         receiptsFound: 0, 
         receiptsProcessed: 0,
-        results: []
+        results: [],
+        dayRange: dayRange
       });
     }
     
-    console.log(`Found ${searchResponse.data.messages.length} potential receipt emails`);
+    console.log(`Found ${searchResponse.data.messages.length} potential receipt emails in last ${dayRange} days`);
     
     const results = [];
     let processedCount = 0;
     let emailIndex = 0;
     
-    // Process each email
-    for (const message of searchResponse.data.messages.slice(0, 10)) { // Limit to 10 for now
+    // Process ALL found emails (remove artificial limit)
+    for (const message of searchResponse.data.messages) {
       emailIndex++;
       try {
-        console.log(`\n=== EMAIL ${emailIndex}/10 ===`);
+        console.log(`\n=== EMAIL ${emailIndex}/${searchResponse.data.messages.length} ===`);
         console.log(`Processing message ID: ${message.id}`);
         
         // Check if we've already processed this email
@@ -1075,12 +1093,13 @@ app.post('/scan-gmail', async (req, res) => {
     }
     
     console.log(`=== GMAIL SCAN COMPLETE ===`);
-    console.log(`Processed ${processedCount} receipts from ${searchResponse.data.messages.length} emails`);
-    
+    console.log(`Processed ${processedCount} receipts from ${searchResponse.data.messages.length} emails in last ${dayRange} days`);
+
     res.json({
-      success: true,
-      receiptsFound: searchResponse.data.messages.length,
-      receiptsProcessed: processedCount,
+    success: true,
+    receiptsFound: searchResponse.data.messages.length,
+    receiptsProcessed: processedCount,
+    dayRange: dayRange,
       results: results
     });
     
