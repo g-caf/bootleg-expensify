@@ -3,6 +3,10 @@ console.log('=== POPUP.JS SCRIPT LOADING ===');
 console.log('Chrome runtime available:', !!chrome.runtime);
 console.log('Extension mode: Sequential PDF processing with progress bar');
 
+// Test if popup.js is executing
+document.title = 'POPUP JS LOADED - ' + new Date().toISOString();
+console.log('=== POPUP.JS EXECUTING ===');
+
 // Gmail API client for browser extension
 class GmailClient {
     constructor() {
