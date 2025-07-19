@@ -568,14 +568,14 @@ class ExpenseGadget {
         const dayDisplay = document.getElementById('dayDisplay');
         const rangeProgress = document.getElementById('rangeProgress');
         
-        // Reset to default values: from today (0) to 90 days ago (90)
-        dayRangeMin.value = '0'; // Today
-        dayRangeMax.value = '90'; // 90 days ago (very end)
-        dayDisplay.textContent = 'today to 90 days ago';
+        // Reset to default values: from today (0) to 7 days ago (7)
+        dayRangeMin.value = '0'; // Today (left dot)
+        dayRangeMax.value = '7'; // 7 days ago (right dot)
+        dayDisplay.textContent = 'today to 7 days ago';
         
         // Update progress bar
         const progressLeft = 0; // 0% from left
-        const progressWidth = 100; // Full width (today to 90 days ago)
+        const progressWidth = (7 / 90) * 100; // 7 days out of 90 (~7.8%)
         rangeProgress.style.left = `${progressLeft}%`;
         rangeProgress.style.width = `${progressWidth}%`;
     }
