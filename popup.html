@@ -75,100 +75,37 @@
             color: #495057;
         }
         
-        .tabs {
-            display: flex;
-            background: white;
-            border-radius: 0;
-            -webkit-border-radius: 0;
-        }
-        
-        .tab {
-            flex: 1;
-            padding: 8px 12px;
-            text-align: center;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            color: #6b7280;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s ease;
-        }
-        
-        .tab.active {
-            color: #f44e40;
-            border-bottom-color: #f44e40;
-        }
-        
-        .tab:hover {
-            color: #f44e40;
-            background: #fafafa;
-        }
-        
-        .tab-content {
+        .main-content {
             flex: 1;
             background: white;
-            position: relative;
+            padding: 16px;
             border-radius: 0 0 8px 8px;
             -webkit-border-radius: 0 0 8px 8px;
             overflow: hidden;
-        }
-        
-        .tab-panel {
-            display: none;
-            padding: 16px;
-            height: 100%;
             box-sizing: border-box;
             overflow-y: auto;
         }
         
-        .tab-panel.active {
-            display: block;
-        }
+
         
-        .drop-zone {
-            border: 2px dashed #d1d5db;
-            border-radius: 8px;
-            padding: 24px;
-            text-align: center;
+        .search-bar-container {
+            display: flex;
+            gap: 8px;
             margin-bottom: 16px;
-            background-color: #f9fafb;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        
-        .drop-zone.dragover {
-            border-color: #f44e40;
-            background-color: #fff5f5;
-        }
-        
-        .drop-zone div:first-child {
-            font-size: 28px;
-            margin-bottom: 8px;
-        }
-        
-        .drop-zone div:nth-child(2) {
-            color: #374151;
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 4px;
-        }
-        
-        .drop-zone div:last-child {
-            color: #6b7280;
-            font-size: 12px;
         }
         
         .scan-btn {
             background: #f44e40;
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             transition: background-color 0.2s;
-            width: 100%;
+            white-space: nowrap;
+            min-width: 100px;
         }
         
         .scan-btn:hover:not(:disabled) {
@@ -194,12 +131,11 @@
         }
         
         .search-input {
-            width: 100%;
-            padding: 8px;
+            flex: 1;
+            padding: 8px 12px;
             border: 1px solid #d1d5db;
             border-radius: 8px;
             font-size: 13px;
-            margin-bottom: 8px;
             box-sizing: border-box;
         }
         
@@ -294,40 +230,7 @@
             border: 1px solid #ffeaa7;
         }
         
-        .progress-section {
-            margin-bottom: 8px;
-            display: none;
-        }
-        
-        .progress-text {
-            color: #374151;
-            font-size: 12px;
-            font-weight: 500;
-            margin-bottom: 6px;
-            text-align: center;
-        }
-        
-        .progress-bar-container {
-            background: #f3f4f6;
-            border-radius: 6px;
-            height: 6px;
-            margin-bottom: 6px;
-            overflow: hidden;
-        }
-        
-        .progress-bar {
-            background: #f44e40;
-            height: 100%;
-            width: 0%;
-            transition: width 0.3s ease;
-            border-radius: 6px;
-        }
-        
-        .progress-count {
-            color: #6b7280;
-            font-size: 11px;
-            text-align: center;
-        }
+
         
 
         
@@ -344,39 +247,15 @@
         <button class="close-btn" id="closeBtn">×</button>
     </div>
     
-    <div class="tabs">
-        <div class="tab active" data-tab="scan">Scan</div>
-        <div class="tab" data-tab="search">Search</div>
-    </div>
-    
-    <div class="tab-content">
-        <div class="tab-panel active" id="scan-panel">
-            <div class="status" id="status"></div>
-            
-            <div class="drop-zone" id="dropZone">
-                <div>📄</div>
-                <div>Drag and drop PDF receipts here</div>
-                <div>or click to browse</div>
-            </div>
-            
-            <div class="progress-section" id="progressSection">
-                <div class="progress-text" id="progressText">Processing receipts...</div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar" id="progressBar"></div>
-                </div>
-                <div class="progress-count" id="progressCount">0 of 0 completed</div>
-            </div>
-            
-            <button class="scan-btn" id="gmailScanBtn" disabled>Connect to Google</button>
-            
-            <input type="file" id="fileInput" accept=".pdf" multiple style="display: none;">
-        </div>
+    <div class="main-content">
+        <div class="status" id="status"></div>
         
-        <div class="tab-panel" id="search-panel">
-            <div class="search-section">
+        <div class="search-section">
+            <div class="search-bar-container">
                 <input type="text" class="search-input" id="searchInput" placeholder="Search your email for receipts...">
-                <div class="search-results" id="searchResults"></div>
+                <button class="scan-btn" id="gmailScanBtn" disabled>Connect to Google</button>
             </div>
+            <div class="search-results" id="searchResults"></div>
         </div>
     </div>
     

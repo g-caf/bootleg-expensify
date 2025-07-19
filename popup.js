@@ -189,7 +189,6 @@ class ExpenseGadget {
 
     async init() {
         this.setupEventListeners();
-        this.setupTabs();
         // Initialize Gmail client after everything else is set up
         try {
             this.gmailClient = new GmailClient();
@@ -200,26 +199,12 @@ class ExpenseGadget {
     }
 
     setupEventListeners() {
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
         const closeBtn = document.getElementById('closeBtn');
-
         const searchInput = document.getElementById('searchInput');
 
         // Close button
         closeBtn.addEventListener('click', () => {
             window.close();
-        });
-
-        // Drop zone events
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', this.handleDragOver.bind(this));
-        dropZone.addEventListener('drop', this.handleDrop.bind(this));
-        dropZone.addEventListener('dragleave', this.handleDragLeave.bind(this));
-
-        // File input change
-        fileInput.addEventListener('change', (e) => {
-            this.processFiles(e.target.files);
         });
 
 
@@ -252,56 +237,9 @@ class ExpenseGadget {
         });
     }
 
-    setupTabs() {
-        const tabs = document.querySelectorAll('.tab');
-        const panels = document.querySelectorAll('.tab-panel');
 
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                const tabName = tab.getAttribute('data-tab');
-                this.switchTab(tabName);
-            });
-        });
-    }
 
-    switchTab(tabName) {
-        // Update active tab
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.classList.remove('active');
-        });
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
 
-        // Update active panel
-        document.querySelectorAll('.tab-panel').forEach(panel => {
-            panel.classList.remove('active');
-        });
-        document.getElementById(`${tabName}-panel`).classList.add('active');
-
-        this.currentTab = tabName;
-    }
-
-    handleDragOver(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        document.getElementById('dropZone').classList.add('dragover');
-    }
-
-    handleDragLeave(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        document.getElementById('dropZone').classList.remove('dragover');
-    }
-
-    handleDrop(e) {
-        console.log('=== DROP EVENT FIRED ===');
-        e.preventDefault();
-        e.stopPropagation();
-        document.getElementById('dropZone').classList.remove('dragover');
-        
-        const files = e.dataTransfer.files;
-        console.log('Files dropped:', files.length);
-        this.processFiles(files);
-    }
 
     async processFiles(files) {
         console.log('=== PROCESS FILES CALLED ===');
