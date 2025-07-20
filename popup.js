@@ -325,53 +325,110 @@ class ExpenseGadget {
 
         // Dual range slider with auto-scan
         let scanTimeout = null;
-        const snapToCommonValues = (value) => {
-            // Direct snapping to common day values regardless of visual position
-            const snapPoints = [7, 15, 30, 60];
-            const snapThreshold = 3; // Snap within 3 days of target
-
+        
+        // Mapping functions between slider position (0-100) and actual days
+        const sliderPositionToDays = (position) => {
+            // Define key mapping points: [sliderPosition, actualDays]
+            const mappingPoints = [
+                [0, 0],    // 0% = today
+                [20, 7],   // 20% = 7 days  
+                [40, 15],  // 40% = 15 days
+                [60, 30],  // 60% = 30 days
+                [80, 60],  // 80% = 60 days
+                [100, 90]  // 100% = 90 days
+            ];
+            
+            // Find the two points to interpolate between
+            for (let i = 0; i < mappingPoints.length - 1; i++) {
+                const [pos1, days1] = mappingPoints[i];
+                const [pos2, days2] = mappingPoints[i + 1];
+                
+                if (position >= pos1 && position <= pos2) {
+                    // Linear interpolation between the two points
+                    const ratio = (position - pos1) / (pos2 - pos1);
+                    return Math.round(days1 + ratio * (days2 - days1));
+                }
+            }
+            
+            // Fallback for values outside range
+            return position <= 0 ? 0 : 90;
+        };
+        
+        const daysToSliderPosition = (days) => {
+            // Reverse mapping from days to slider position
+            const mappingPoints = [
+                [0, 0],    // today = 0%
+                [7, 20],   // 7 days = 20%
+                [15, 40],  // 15 days = 40%
+                [30, 60],  // 30 days = 60%
+                [60, 80],  // 60 days = 80%
+                [90, 100]  // 90 days = 100%
+            ];
+            
+            for (let i = 0; i < mappingPoints.length - 1; i++) {
+                const [days1, pos1] = mappingPoints[i];
+                const [days2, pos2] = mappingPoints[i + 1];
+                
+                if (days >= days1 && days <= days2) {
+                    const ratio = (days - days1) / (days2 - days1);
+                    return Math.round(pos1 + ratio * (pos2 - pos1));
+                }
+            }
+            
+            return days <= 0 ? 0 : 100;
+        };
+        
+        const snapToCommonValues = (position) => {
+            // Snap to common slider positions (20%, 40%, 60%, 80%)
+            const snapPoints = [20, 40, 60, 80];
+            const snapThreshold = 3; // Snap within 3% of target
+            
             for (const snapPoint of snapPoints) {
-                if (Math.abs(value - snapPoint) <= snapThreshold) {
+                if (Math.abs(position - snapPoint) <= snapThreshold) {
                     return snapPoint;
                 }
             }
-            return value;
+            return position;
         };
 
         const updateRangeDisplay = () => {
-            let minVal = parseInt(dayRangeMin.value); // Days from today (0 = today)
-            let maxVal = parseInt(dayRangeMax.value); // Days ago (7 = 7 days ago)
+            let minPos = parseInt(dayRangeMin.value); // Slider position (0-100)
+            let maxPos = parseInt(dayRangeMax.value); // Slider position (0-100)
 
-            // Apply snapping to common values
-            minVal = snapToCommonValues(minVal);
-            maxVal = snapToCommonValues(maxVal);
+            // Apply snapping to common positions
+            minPos = snapToCommonValues(minPos);
+            maxPos = snapToCommonValues(maxPos);
 
             // Update the input values to reflect snapping
-            dayRangeMin.value = minVal;
-            dayRangeMax.value = maxVal;
+            dayRangeMin.value = minPos;
+            dayRangeMax.value = maxPos;
 
-            // Ensure min <= max (today or recent <= older days ago)
-            if (minVal > maxVal) {
+            // Ensure min <= max
+            if (minPos > maxPos) {
                 if (dayRangeMin === document.activeElement) {
-                    dayRangeMax.value = minVal;
-                    maxVal = minVal;
+                    dayRangeMax.value = minPos;
+                    maxPos = minPos;
                 } else {
-                    dayRangeMin.value = maxVal;
-                    minVal = maxVal;
+                    dayRangeMin.value = maxPos;
+                    minPos = maxPos;
                 }
             }
 
-            const finalMin = Math.min(minVal, maxVal);
-            const finalMax = Math.max(minVal, maxVal);
+            const finalMinPos = Math.min(minPos, maxPos);
+            const finalMaxPos = Math.max(minPos, maxPos);
 
-            // Update display text
-            const fromText = finalMin === 0 ? 'today' : `${finalMin} day${finalMin > 1 ? 's' : ''} ago`;
-            const toText = `${finalMax} day${finalMax > 1 ? 's' : ''} ago`;
+            // Convert slider positions to actual day values
+            const finalMinDays = sliderPositionToDays(finalMinPos);
+            const finalMaxDays = sliderPositionToDays(finalMaxPos);
+
+            // Update display text with actual day values
+            const fromText = finalMinDays === 0 ? 'today' : `${finalMinDays} day${finalMinDays > 1 ? 's' : ''} ago`;
+            const toText = `${finalMaxDays} day${finalMaxDays > 1 ? 's' : ''} ago`;
             dayDisplay.textContent = `${fromText} to ${toText}`;
 
-            // Update progress bar
-            const progressLeft = (finalMin / 90) * 100;
-            const progressWidth = ((finalMax - finalMin) / 90) * 100;
+            // Update progress bar (use slider positions for visual consistency)
+            const progressLeft = finalMinPos;
+            const progressWidth = finalMaxPos - finalMinPos;
             rangeProgress.style.left = `${progressLeft}%`;
             rangeProgress.style.width = `${progressWidth}%`;
 
@@ -682,14 +739,14 @@ class ExpenseGadget {
         const dayDisplay = document.getElementById('dayDisplay');
         const rangeProgress = document.getElementById('rangeProgress');
 
-        // Reset to default values: from today (0) to 7 days ago (7)
+        // Reset to default values: from today (0%) to 7 days ago (20%)
         dayRangeMin.value = '0'; // Today (left dot)
-        dayRangeMax.value = '7'; // 7 days ago (right dot)
+        dayRangeMax.value = '20'; // 7 days ago (right dot)
         dayDisplay.textContent = 'today to 7 days ago';
 
         // Update progress bar
         const progressLeft = 0; // 0% from left
-        const progressWidth = (7 / 90) * 100; // 7 days out of 90 (~7.8%)
+        const progressWidth = 20; // 20% width
         rangeProgress.style.left = `${progressLeft}%`;
         rangeProgress.style.width = `${progressWidth}%`;
     }
@@ -795,6 +852,25 @@ class ExpenseGadget {
         }, 8000);
     }
 
+    // Mapping functions between slider position (0-100) and actual days
+    sliderPositionToDays(position) {
+        const mappingPoints = [
+            [0, 0], [20, 7], [40, 15], [60, 30], [80, 60], [100, 90]
+        ];
+        
+        for (let i = 0; i < mappingPoints.length - 1; i++) {
+            const [pos1, days1] = mappingPoints[i];
+            const [pos2, days2] = mappingPoints[i + 1];
+            
+            if (position >= pos1 && position <= pos2) {
+                const ratio = (position - pos1) / (pos2 - pos1);
+                return Math.round(days1 + ratio * (days2 - days1));
+            }
+        }
+        
+        return position <= 0 ? 0 : 90;
+    }
+
     async scanGmail() {
         console.log('=== GMAIL SCAN STARTED ===');
 
@@ -804,9 +880,11 @@ class ExpenseGadget {
         const dayRangeMin = document.getElementById('dayRangeMin');
         const dayRangeMax = document.getElementById('dayRangeMax');
 
-        // Get selected date range (search backward from today)
-        const startDays = parseInt(dayRangeMin.value); // Start (0 = today)
-        const endDays = parseInt(dayRangeMax.value); // End (90 = 90 days ago)
+        // Get selected slider positions and convert to actual day values
+        const startPos = parseInt(dayRangeMin.value); // Start position (0-100)
+        const endPos = parseInt(dayRangeMax.value); // End position (0-100)
+        const startDays = this.sliderPositionToDays(startPos); // Convert to actual days
+        const endDays = this.sliderPositionToDays(endPos); // Convert to actual days
         console.log(`Scanning from ${startDays === 0 ? 'today' : startDays + ' days ago'} backward to ${endDays} days ago`);
 
         // Clear search results and show loading
