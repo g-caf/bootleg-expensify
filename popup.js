@@ -421,32 +421,52 @@ class ExpenseGadget {
             const quarterStart = new Date(currentYear, quarterStartMonth, 1);
             const qtdDays = Math.floor((today - quarterStart) / (1000 * 60 * 60 * 24));
             
-            return { mtdDays, lastMonthDays, qtdDays };
+            // Last quarter: first day of previous quarter
+            const lastQuarterStartMonth = quarterStartMonth - 3;
+            const lastQuarterStart = lastQuarterStartMonth < 0 
+                ? new Date(currentYear - 1, lastQuarterStartMonth + 12, 1)
+                : new Date(currentYear, lastQuarterStartMonth, 1);
+            const lastQuarterDays = Math.floor((today - lastQuarterStart) / (1000 * 60 * 60 * 24));
+            
+            return { mtdDays, lastMonthDays, qtdDays, lastQuarterDays };
         };
         
         // Helper function to convert days to business period names
         const daysToBusinessPeriod = (days) => {
-            const { mtdDays, lastMonthDays, qtdDays } = getBusinessPeriodDays();
+            const { mtdDays, lastMonthDays, qtdDays, lastQuarterDays } = getBusinessPeriodDays();
+            
+            console.log(`Global daysToBusinessPeriod: input=${days}, mtd=${mtdDays}, lastMonth=${lastMonthDays}, qtd=${qtdDays}, lastQuarter=${lastQuarterDays}`);
             
             if (days === 0) return 'today';
-            if (Math.abs(days - mtdDays) <= 1) return 'month-to-date';
-            if (Math.abs(days - lastMonthDays) <= 2) return 'last month';
-            if (Math.abs(days - qtdDays) <= 2) return 'quarter-to-date';
+            
+            // Use exact matching with tight tolerance
+            if (Math.abs(days - mtdDays) <= 1) {
+                return 'month-to-date';
+            }
+            if (Math.abs(days - lastMonthDays) <= 2) {
+                return 'last month'; 
+            }
+            if (Math.abs(days - qtdDays) <= 2) {
+                return 'quarter-to-date';
+            }
+            if (Math.abs(days - lastQuarterDays) <= 3) {
+                return 'last quarter';
+            }
             
             return `${days} day${days > 1 ? 's' : ''} ago`;
         };
         
         // Mapping functions between slider position (0-100) and actual days
         const sliderPositionToDays = (position) => {
-            const { mtdDays, lastMonthDays, qtdDays } = getBusinessPeriodDays();
+            const { mtdDays, lastMonthDays, qtdDays, lastQuarterDays } = getBusinessPeriodDays();
             
             // Define key mapping points: [sliderPosition, actualDays]
             const mappingPoints = [
-                [0, 0],              // 0% = today
-                [25, mtdDays],       // 25% = month-to-date  
-                [50, lastMonthDays], // 50% = last month
-                [75, qtdDays],       // 75% = quarter-to-date
-                [100, qtdDays]       // 100% = quarter-to-date (max)
+                [0, 0],                  // 0% = today
+                [25, mtdDays],           // 25% = month-to-date  
+                [50, lastMonthDays],     // 50% = last month
+                [75, qtdDays],           // 75% = quarter-to-date
+                [100, lastQuarterDays]   // 100% = last quarter
             ];
             
             // Find the two points to interpolate between
@@ -462,19 +482,19 @@ class ExpenseGadget {
             }
             
             // Fallback for values outside range
-            return position <= 0 ? 0 : qtdDays;
+            return position <= 0 ? 0 : lastQuarterDays;
         };
         
         const daysToSliderPosition = (days) => {
-            const { mtdDays, lastMonthDays, qtdDays } = getBusinessPeriodDays();
+            const { mtdDays, lastMonthDays, qtdDays, lastQuarterDays } = getBusinessPeriodDays();
             
             // Reverse mapping from days to slider position
             const mappingPoints = [
-                [0, 0],              // today = 0%
-                [mtdDays, 25],       // MTD = 25%
-                [lastMonthDays, 50], // last month = 50%
-                [qtdDays, 75],       // QTD = 75%
-                [qtdDays, 100]       // QTD = 100%
+                [0, 0],                  // today = 0%
+                [mtdDays, 25],           // MTD = 25%
+                [lastMonthDays, 50],     // last month = 50%
+                [qtdDays, 75],           // QTD = 75%
+                [lastQuarterDays, 100]   // last quarter = 100%
             ];
             
             for (let i = 0; i < mappingPoints.length - 1; i++) {
@@ -1025,45 +1045,52 @@ class ExpenseGadget {
         const quarterStart = new Date(currentYear, quarterStartMonth, 1);
         const qtdDays = Math.floor((today - quarterStart) / (1000 * 60 * 60 * 24));
         
-        return { mtdDays, lastMonthDays, qtdDays };
+        // Last quarter: first day of previous quarter
+        const lastQuarterStartMonth = quarterStartMonth - 3;
+        const lastQuarterStart = lastQuarterStartMonth < 0 
+            ? new Date(currentYear - 1, lastQuarterStartMonth + 12, 1)
+            : new Date(currentYear, lastQuarterStartMonth, 1);
+        const lastQuarterDays = Math.floor((today - lastQuarterStart) / (1000 * 60 * 60 * 24));
+        
+        return { mtdDays, lastMonthDays, qtdDays, lastQuarterDays };
     }
     
     // Convert days ago to business period name
     daysToBusinessPeriod(days) {
-        const { mtdDays, lastMonthDays, qtdDays } = this.getBusinessPeriodDays();
+        const { mtdDays, lastMonthDays, qtdDays, lastQuarterDays } = this.getBusinessPeriodDays();
         
-        console.log(`daysToBusinessPeriod: input=${days}, mtd=${mtdDays}, lastMonth=${lastMonthDays}, qtd=${qtdDays}`);
+        console.log(`daysToBusinessPeriod: input=${days}, mtd=${mtdDays}, lastMonth=${lastMonthDays}, qtd=${qtdDays}, lastQuarter=${lastQuarterDays}`);
         
         if (days === 0) return 'today';
         
-        // Use larger tolerance and check closest match
-        const mtdDiff = Math.abs(days - mtdDays);
-        const lastMonthDiff = Math.abs(days - lastMonthDays);
-        const qtdDiff = Math.abs(days - qtdDays);
-        
-        // Find the closest match
-        if (mtdDiff <= lastMonthDiff && mtdDiff <= qtdDiff && mtdDiff <= 5) {
+        // Use exact matching with tight tolerance, prioritize exact business period values
+        if (Math.abs(days - mtdDays) <= 1) {
             return 'month-to-date';
-        } else if (lastMonthDiff <= qtdDiff && lastMonthDiff <= 5) {
-            return 'last month';
-        } else if (qtdDiff <= 5) {
+        }
+        if (Math.abs(days - lastMonthDays) <= 2) {
+            return 'last month'; 
+        }
+        if (Math.abs(days - qtdDays) <= 2) {
             return 'quarter-to-date';
         }
+        if (Math.abs(days - lastQuarterDays) <= 3) {
+            return 'last quarter';
+        }
         
-        // Fallback to days for intermediate values
+        // For intermediate values, return day count
         return `${days} day${days > 1 ? 's' : ''} ago`;
     }
     
     // Mapping functions between slider position (0-100) and actual days
     sliderPositionToDays(position) {
-        const { mtdDays, lastMonthDays, qtdDays } = this.getBusinessPeriodDays();
+        const { mtdDays, lastMonthDays, qtdDays, lastQuarterDays } = this.getBusinessPeriodDays();
         
         const mappingPoints = [
-            [0, 0],           // Today
-            [25, mtdDays],    // Month-to-date
-            [50, lastMonthDays], // Last month
-            [75, qtdDays],    // Quarter-to-date  
-            [100, qtdDays]    // Quarter-to-date (max)
+            [0, 0],                  // Today
+            [25, mtdDays],           // Month-to-date
+            [50, lastMonthDays],     // Last month
+            [75, qtdDays],           // Quarter-to-date  
+            [100, lastQuarterDays]   // Last quarter
         ];
         
         for (let i = 0; i < mappingPoints.length - 1; i++) {
@@ -1076,7 +1103,7 @@ class ExpenseGadget {
             }
         }
         
-        return position <= 0 ? 0 : qtdDays;
+        return position <= 0 ? 0 : lastQuarterDays;
     }
 
     async scanGmail() {
