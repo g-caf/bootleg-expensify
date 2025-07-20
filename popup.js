@@ -1091,7 +1091,14 @@ class ExpenseGadget {
                     const sliderContainer = document.getElementById('dateRangeContainer');
                     const sliderVisible = sliderContainer && sliderContainer.style.display !== 'none';
                     gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
-                    this.showScanResults(`Scan session expired. Please try again.`);
+                    // No expired session messages in popup - scan fails silently
+                    return;
+                }
+                
+                if (response.status === 500) {
+                    // Server error - log but continue polling (background process might still be running)
+                    console.log('Server error during status check, continuing to poll...');
+                    setTimeout(poll, pollInterval);
                     return;
                 }
                 
@@ -1115,11 +1122,11 @@ class ExpenseGadget {
 
                 // Still processing - check if we should continue polling
                 if (Date.now() - startTime > maxPollTime) {
-                    // Timeout
+                    // Timeout - stop polling silently
                     gmailScanBtn.disabled = false;
                     const sliderVisible = document.getElementById('dateRangeContainer').style.display !== 'none';
                     gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
-                    this.showScanResults(`⏱️ Scan taking longer than expected. Check back later.`);
+                    // No timeout messages in popup - just stop polling
                     return;
                 }
 
@@ -1132,7 +1139,7 @@ class ExpenseGadget {
                 const sliderContainer = document.getElementById('dateRangeContainer');
                 const sliderVisible = sliderContainer && sliderContainer.style.display !== 'none';
                 gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
-                this.showScanResults(`❌ Error checking scan progress: ${error.message}`);
+                // No error messages in popup - scan fails silently
             }
         };
 

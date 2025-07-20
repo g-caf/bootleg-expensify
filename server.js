@@ -986,7 +986,17 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
 
                 // Convert HTML email to PDF and process
                 console.log(`    🔄 Processing email content to PDF`);
-                const processed = await processEmailContent(emailHTML, subject, sender, req.session.googleTokens, date, originalSender);
+                let processed;
+                try {
+                    processed = await processEmailContent(emailHTML, subject, sender, req.session.googleTokens, date, originalSender);
+                } catch (processingError) {
+                    console.error(`    ❌ Failed to process email ${message.id}:`, processingError);
+                    processed = {
+                        success: false,
+                        error: `Processing failed: ${processingError.message}`,
+                        processed: false
+                    };
+                }
 
                 console.log(`    📊 Processing result: ${processed.success ? '✅ SUCCESS' : '❌ FAILED'}`);
                 if (processed.vendor) console.log(`       Vendor: ${processed.vendor}`);
