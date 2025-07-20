@@ -870,10 +870,9 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
             // Instacart receipts  
             'from:instacart.com (subject:receipt OR subject:"Your Instacart order receipt" OR subject:"Order receipt")',
             ')',
-            // Exclude delivery/shipping notifications
-            '-subject:Shipped: -subject:Delivered: -subject:"Out for delivery" -subject:"Your package"',
-            // Exclude refunds and cancellations
-            '-subject:refund -subject:cancelled -subject:canceled -subject:"order cancelled"',
+            // Temporarily disable exclusions to test jack.caffarel emails
+            // '-subject:Shipped: -subject:Delivered: -subject:"Out for delivery" -subject:"Your package"',
+            // '-subject:refund -subject:cancelled -subject:canceled -subject:"order cancelled"',
             // Use date range - from X days ago to Y days ago (handle today = 0)
             toDays === 0 ? `newer_than:${fromDays}d` : `newer_than:${fromDays}d older_than:${toDays}d`
         ].join(' ');
@@ -882,7 +881,7 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
 
         // Scale maxResults based on date range - more days = more potential emails
         const daySpan = fromDays - toDays + 1; // Total days in the range
-        const maxResults = Math.min(250, Math.max(25, daySpan * 5)); // 5 emails per day on average, max 250
+        const maxResults = Math.min(500, Math.max(50, daySpan * 10)); // Increased for debugging
         console.log(`Using maxResults: ${maxResults} for ${daySpan} day range (${fromDays} to ${toDays} days ago)`);
 
         const searchResponse = await gmail.users.messages.list({
@@ -905,6 +904,15 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
         }
 
         console.log(`Found ${searchResponse.data.messages.length} potential receipt emails`);
+        
+        // Debug: Log first few message IDs and basic info
+        if (searchResponse.data.messages && searchResponse.data.messages.length > 0) {
+            console.log('First few messages found:');
+            for (let i = 0; i < Math.min(5, searchResponse.data.messages.length); i++) {
+                const msg = searchResponse.data.messages[i];
+                console.log(`  ${i + 1}. Message ID: ${msg.id}`);
+            }
+        }
 
         const results = [];
         let processedCount = 0;
@@ -1138,6 +1146,24 @@ app.get('/scan-status/:scanId', (req, res) => {
     } catch (error) {
         console.error('Scan status error:', error);
         res.status(500).json({ error: sanitizeError(error) });
+    }
+});
+
+// Debug endpoint to clear processed emails cache
+app.post('/debug/clear-processed', (req, res) => {
+    try {
+        const beforeCount = processedEmailIds.size;
+        processedEmailIds.clear();
+        saveProcessedEmails(processedEmailIds);
+        console.log(`Cleared ${beforeCount} processed email IDs`);
+        
+        res.json({
+            success: true,
+            message: `Cleared ${beforeCount} processed email IDs`
+        });
+    } catch (error) {
+        console.error('Error clearing processed emails:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
