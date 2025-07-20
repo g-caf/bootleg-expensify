@@ -129,6 +129,43 @@ class GmailClient {
                 }
             });
 
+            if (response.status === 401) {
+                // Token expired, try to refresh from server
+                console.log('Token expired, attempting to refresh...');
+                const newToken = await this.getTokenFromServer();
+                if (newToken) {
+                    this.accessToken = newToken;
+                    await chrome.storage.local.set({ gmailAccessToken: newToken });
+                    
+                    // Retry the request with new token
+                    const retryResponse = await fetch(searchUrl, {
+                        headers: {
+                            'Authorization': `Bearer ${this.accessToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!retryResponse.ok) {
+                        throw new Error(`Gmail API error: ${retryResponse.status}`);
+                    }
+                    
+                    const data = await retryResponse.json();
+                    if (!data.messages || data.messages.length === 0) {
+                        return [];
+                    }
+                    
+                    const emailPromises = data.messages.map(message => this.getMessageDetails(message.id));
+                    const emails = await Promise.all(emailPromises);
+                    return emails.filter(email => email !== null);
+                } else {
+                    // No valid token available, user needs to re-authenticate
+                    this.isAuthenticated = false;
+                    this.accessToken = null;
+                    await chrome.storage.local.remove(['gmailAccessToken']);
+                    throw new Error('Authentication expired. Please reconnect to Gmail.');
+                }
+            }
+
             if (!response.ok) {
                 throw new Error(`Gmail API error: ${response.status}`);
             }
@@ -162,6 +199,48 @@ class GmailClient {
                     'Content-Type': 'application/json'
                 }
             });
+
+            if (response.status === 401) {
+                // Token expired, try to refresh from server
+                const newToken = await this.getTokenFromServer();
+                if (newToken) {
+                    this.accessToken = newToken;
+                    await chrome.storage.local.set({ gmailAccessToken: newToken });
+                    
+                    // Retry the request with new token
+                    const retryResponse = await fetch(messageUrl, {
+                        headers: {
+                            'Authorization': `Bearer ${this.accessToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!retryResponse.ok) {
+                        console.error(`Error getting message ${messageId} after retry: ${retryResponse.status}`);
+                        return null;
+                    }
+                    
+                    const message = await retryResponse.json();
+                    const headers = message.payload.headers || [];
+                    
+                    const subject = headers.find(h => h.name === 'Subject')?.value || 'No Subject';
+                    const from = headers.find(h => h.name === 'From')?.value || 'Unknown Sender';
+                    const date = headers.find(h => h.name === 'Date')?.value || 'No Date';
+                    
+                    return {
+                        id: messageId,
+                        subject: subject,
+                        from: from,
+                        date: date
+                    };
+                } else {
+                    // No valid token available
+                    this.isAuthenticated = false;
+                    this.accessToken = null;
+                    await chrome.storage.local.remove(['gmailAccessToken']);
+                    return null;
+                }
+            }
 
             if (!response.ok) {
                 console.error(`Error getting message ${messageId}: ${response.status}`);
@@ -1085,7 +1164,15 @@ class ExpenseGadget {
 
         } catch (error) {
             console.error('Search error:', error);
-            searchResults.innerHTML = `<div style="color: #dc2626; text-align: center; padding: 20px;">❌ Search failed: ${error.message}</div>`;
+            
+            // Check if authentication expired
+            if (error.message.includes('Authentication expired')) {
+                // Update UI to show disconnected state
+                this.updateUI(false);
+                searchResults.innerHTML = '<div style="color: #dc2626; text-align: center; padding: 20px;">🔐 Authentication expired. Please reconnect to Google.</div>';
+            } else {
+                searchResults.innerHTML = `<div style="color: #dc2626; text-align: center; padding: 20px;">❌ Search failed: ${error.message}</div>`;
+            }
         }
     }
 
