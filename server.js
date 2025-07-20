@@ -2161,8 +2161,49 @@ app.post('/convert-email-to-pdf', async (req, res) => {
 
         console.log('Converting email to PDF:', emailId);
 
+        // Extract data for smart naming (same logic as scan, but more permissive)
+        const htmlContent = emailContent.body || 'No content available';
+        const text = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        
+        // Try to extract vendor, amount, and date for better naming
+        let vendor = extractVendor(text);
+        let amount = extractAmount(text);
+        let receiptDate = extractEmailDate(text, emailContent.subject, emailContent.from, htmlContent);
+        
+        // Enhanced vendor extraction
+        if (!vendor && emailContent.from) {
+            vendor = extractVendorFromSender(emailContent.from);
+        }
+        if (!vendor && emailContent.subject) {
+            vendor = extractVendorFromSubject(emailContent.subject);
+        }
+        if (!vendor && text.length > 50) {
+            const contextVendor = analyzeContext(text);
+            if (contextVendor) {
+                vendor = contextVendor;
+            }
+        }
+
+        console.log(`Manual convert - extracted: vendor=${vendor}, amount=${amount}, date=${receiptDate}`);
+
+        // Create smart filename
+        let outputFilename;
+        if (vendor && amount) {
+            const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+            outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
+        } else if (vendor) {
+            const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+            outputFilename = `${vendor} ${dateStr}.pdf`;
+        } else {
+            const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+            const subject = emailContent.subject || 'Email';
+            outputFilename = `${subject.substring(0, 30)} ${dateStr}.pdf`;
+        }
+
+        console.log(`Manual convert filename: ${outputFilename}`);
+
         // Clean and process email body
-        let cleanBody = emailContent.body || 'No content available';
+        let cleanBody = htmlContent;
 
         // If body contains HTML, try to clean it up
         if (cleanBody.includes('<') && cleanBody.includes('>')) {
