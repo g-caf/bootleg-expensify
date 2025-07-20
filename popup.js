@@ -439,17 +439,18 @@ class ExpenseGadget {
             
             if (days === 0) return 'today';
             
-            // Use exact matching with tight tolerance
-            if (Math.abs(days - mtdDays) <= 1) {
+            // Use exact matching with consistent tolerance
+            const tolerance = 1;
+            if (Math.abs(days - mtdDays) <= tolerance) {
                 return 'month-to-date';
             }
-            if (Math.abs(days - lastMonthDays) <= 2) {
+            if (Math.abs(days - lastMonthDays) <= tolerance) {
                 return 'last month'; 
             }
-            if (Math.abs(days - qtdDays) <= 2) {
+            if (Math.abs(days - qtdDays) <= tolerance) {
                 return 'quarter-to-date';
             }
-            if (Math.abs(days - lastQuarterDays) <= 3) {
+            if (Math.abs(days - lastQuarterDays) <= tolerance) {
                 return 'last quarter';
             }
             
@@ -511,9 +512,9 @@ class ExpenseGadget {
         };
         
         const snapToCommonValues = (position) => {
-            // Snap to common slider positions (20%, 40%, 60%, 80%)
-            const snapPoints = [20, 40, 60, 80];
-            const snapThreshold = 3; // Snap within 3% of target
+            // Snap to business period positions (0%, 25%, 50%, 75%, 100%)
+            const snapPoints = [0, 25, 50, 75, 100];
+            const snapThreshold = 4; // Snap within 4% of target
             
             for (const snapPoint of snapPoints) {
                 if (Math.abs(position - snapPoint) <= snapThreshold) {
@@ -1063,17 +1064,18 @@ class ExpenseGadget {
         
         if (days === 0) return 'today';
         
-        // Use exact matching with tight tolerance, prioritize exact business period values
-        if (Math.abs(days - mtdDays) <= 1) {
+        // Use exact matching with consistent tolerance
+        const tolerance = 1;
+        if (Math.abs(days - mtdDays) <= tolerance) {
             return 'month-to-date';
         }
-        if (Math.abs(days - lastMonthDays) <= 2) {
+        if (Math.abs(days - lastMonthDays) <= tolerance) {
             return 'last month'; 
         }
-        if (Math.abs(days - qtdDays) <= 2) {
+        if (Math.abs(days - qtdDays) <= tolerance) {
             return 'quarter-to-date';
         }
-        if (Math.abs(days - lastQuarterDays) <= 3) {
+        if (Math.abs(days - lastQuarterDays) <= tolerance) {
             return 'last quarter';
         }
         
