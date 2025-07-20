@@ -963,6 +963,9 @@ class ExpenseGadget {
             html += `<div class="process-status ${processed ? 'status-success' : 'status-error'}">`;
             html += processed ? '✅ Processed' : '❌ Failed';
             html += `</div>`;
+            if (result.pdfGenerated === false) {
+                html += `<div class="warning-message">⚠️ Text fallback used</div>`;
+            }
             if (error) {
                 html += `<div class="error-message">Error: ${this.escapeHtml(error)}</div>`;
             }

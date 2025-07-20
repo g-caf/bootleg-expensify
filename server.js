@@ -1285,14 +1285,15 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
         }
 
         return {
-            success: !!(vendor && amount && isPDF),
+            success: !!(vendor && amount), // Success if we extracted data, regardless of PDF status
             vendor,
             amount,
             receiptDate,
             filename: outputFilename,
             emailContent: text, // Include full email text content
             htmlContent: htmlContent, // Include original HTML content
-            error: isPDF ? null : 'PDF generation failed - Browserless.io error',
+            pdfGenerated: isPDF,
+            error: isPDF ? null : 'PDF generation used text fallback - check Browserless.io configuration',
             googleDrive: driveUpload
         };
 
@@ -1556,17 +1557,25 @@ function parseEmailDate(dateStr) {
 async function createEmailReceiptPDFWithBrowserless(data) {
     try {
         console.log(`    🌐 Starting Browserless.io PDF generation...`);
+        
+        // Check if API key is configured
+        const apiKey = process.env.BROWSERLESS_API_KEY;
+        if (!apiKey || apiKey === 'YOUR_BROWSERLESS_KEY') {
+            throw new Error('BROWSERLESS_API_KEY not configured');
+        }
+        console.log(`    🔑 API key configured: ${apiKey.substring(0, 8)}...`);
 
         // Create email-like HTML for natural rendering
         const emailHtml = createEmailHTML(data);
+        console.log(`    📄 Generated HTML: ${emailHtml.length} characters`);
 
-        console.log(`    📝 Sending HTML to Browserless.io...`);
+        console.log(`    📝 Sending request to Browserless.io...`);
 
         const browserlessResponse = await fetch('https://chrome.browserless.io/pdf', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.BROWSERLESS_API_KEY}`
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
                 html: emailHtml,
@@ -1583,6 +1592,8 @@ async function createEmailReceiptPDFWithBrowserless(data) {
             })
         });
 
+        console.log(`    📡 Browserless.io response status: ${browserlessResponse.status}`);
+        
         if (!browserlessResponse.ok) {
             const errorText = await browserlessResponse.text();
             console.error('    ❌ Browserless.io API error:', browserlessResponse.status, errorText);
@@ -1591,6 +1602,11 @@ async function createEmailReceiptPDFWithBrowserless(data) {
 
         const pdfBuffer = Buffer.from(await browserlessResponse.arrayBuffer());
         console.log(`    ✅ Browserless.io PDF generated successfully: ${pdfBuffer.length} bytes`);
+        
+        // Verify it's actually a PDF
+        const pdfHeader = pdfBuffer.toString('ascii', 0, 4);
+        console.log(`    🔍 PDF header check: "${pdfHeader}"`);
+        
         return pdfBuffer;
 
     } catch (error) {
