@@ -2165,26 +2165,56 @@ app.post('/convert-email-to-pdf', async (req, res) => {
         const htmlContent = emailContent.body || 'No content available';
         const text = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
         
+        console.log(`=== CONVERT-TO-PDF DEBUG ===`);
+        console.log(`Email from: "${emailContent.from}"`);
+        console.log(`Email subject: "${emailContent.subject}"`);
+        console.log(`Text length: ${text.length}`);
+        console.log(`Text sample: "${text.substring(0, 100)}..."`);
+        
         // Try to extract vendor, amount, and date for better naming
+        console.log(`--- Step 1: Extract from email text ---`);
         let vendor = extractVendor(text);
+        console.log(`Vendor from text: ${vendor}`);
+        
+        console.log(`--- Step 2: Extract amount ---`);
         let amount = extractAmount(text);
+        console.log(`Amount extracted: ${amount}`);
+        
+        console.log(`--- Step 3: Extract date ---`);
         let receiptDate = extractEmailDate(text, emailContent.subject, emailContent.from, htmlContent);
+        console.log(`Date extracted: ${receiptDate}`);
         
         // Enhanced vendor extraction
+        console.log(`--- Step 4: Try vendor from sender ---`);
         if (!vendor && emailContent.from) {
+            console.log(`Attempting vendor extraction from sender: "${emailContent.from}"`);
             vendor = extractVendorFromSender(emailContent.from);
+            console.log(`Vendor from sender result: ${vendor}`);
         }
+        
+        console.log(`--- Step 5: Try vendor from subject ---`);
         if (!vendor && emailContent.subject) {
+            console.log(`Attempting vendor extraction from subject: "${emailContent.subject}"`);
             vendor = extractVendorFromSubject(emailContent.subject);
+            console.log(`Vendor from subject result: ${vendor}`);
         }
+        
+        console.log(`--- Step 6: Try context analysis ---`);
         if (!vendor && text.length > 50) {
+            console.log(`Attempting context analysis on text...`);
             const contextVendor = analyzeContext(text);
             if (contextVendor) {
                 vendor = contextVendor;
+                console.log(`Vendor from context: ${vendor}`);
+            } else {
+                console.log(`No vendor found from context analysis`);
             }
         }
 
-        console.log(`Manual convert - extracted: vendor=${vendor}, amount=${amount}, date=${receiptDate}`);
+        console.log(`=== FINAL EXTRACTION RESULTS ===`);
+        console.log(`Final vendor: ${vendor}`);
+        console.log(`Final amount: ${amount}`);
+        console.log(`Final date: ${receiptDate}`);
 
         // Create smart filename
         let outputFilename;
