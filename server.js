@@ -6,12 +6,40 @@ const session = require('express-session');
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const validator = require('validator');
 
 
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+const isProduction = process.env.NODE_ENV === 'production';
+
 console.log('=== FORCING REDEPLOY - AUTH TOKEN ENDPOINT SHOULD BE AVAILABLE ===');
+
+// Security middleware
+app.use(helmet({
+    crossOriginEmbedderPolicy: false, // Allow extension embedding
+    contentSecurityPolicy: false // Let browser handle CSP for extensions
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: { error: 'Too many requests, please try again later' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+app.use(limiter);
+
+// Stricter rate limiting for expensive operations
+const strictLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // Limit to 20 PDF operations per 15 minutes
+    message: { error: 'Too many PDF operations, please try again later' }
+});
 
 // Track processed emails to prevent duplicates - persistent storage
 const PROCESSED_EMAILS_FILE = path.join(__dirname, 'processed_emails.json');
@@ -50,41 +78,96 @@ const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_REDIRECT_URI || 'https://bootleg-expensify.onrender.com/auth/google/callback'
 );
 
-// Session configuration
+// Session configuration - require proper secret
+if (!process.env.SESSION_SECRET) {
+    console.error('❌ SESSION_SECRET environment variable is required');
+    process.exit(1);
+}
+
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'expense-gadget-secret-key',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false } // Set to true in production with HTTPS
+    cookie: { 
+        secure: isProduction, // Use secure cookies in production
+        httpOnly: true, // Prevent XSS attacks
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
 }));
 
-// CORS configuration for Chrome extensions
+// CORS configuration for Chrome extensions - restrict to specific origins
+const allowedOrigins = [
+    'https://bootleg-expensify.onrender.com', // Your server
+    /^chrome-extension:\/\/[a-z]{32}$/, // Chrome extension pattern
+    /^moz-extension:\/\/[a-z0-9-]+$/, // Firefox extension pattern
+];
+
+if (!isProduction) {
+    allowedOrigins.push('http://localhost:3000', 'http://localhost:10000');
+}
+
 app.use(cors({
-    origin: true, // Allow all origins
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, etc)
+        if (!origin) return callback(null, true);
+        
+        const isAllowed = allowedOrigins.some(allowed => {
+            if (typeof allowed === 'string') return allowed === origin;
+            return allowed.test(origin);
+        });
+        
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            console.warn(`❌ Blocked CORS request from: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Additional CORS headers for preflight requests
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-    if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
-    } else {
-        next();
-    }
-});
-
-app.use(express.json());
+// Request size limits
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Configure multer for file uploads with much smaller limit
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 2 * 1024 * 1024 } // Reduced to 2MB limit
 });
+
+// Input sanitization functions
+function sanitizeText(text) {
+    if (!text || typeof text !== 'string') return '';
+    return validator.escape(text.trim().substring(0, 10000)); // Limit length and escape HTML
+}
+
+function sanitizeEmail(email) {
+    if (!email || typeof email !== 'string') return '';
+    return validator.isEmail(email) ? validator.normalizeEmail(email) : '';
+}
+
+function sanitizeFilename(filename) {
+    if (!filename || typeof filename !== 'string') return '';
+    // Remove dangerous characters and limit length
+    return filename.replace(/[^a-zA-Z0-9._-]/g, '_').substring(0, 100);
+}
+
+// Error handling - don't leak sensitive information
+function sanitizeError(error) {
+    if (isProduction) {
+        // In production, return generic error messages
+        return { error: 'An error occurred processing your request' };
+    }
+    // In development, return more details but sanitize sensitive data
+    const message = error.message || 'Unknown error';
+    return { 
+        error: message.replace(/\/[^\/\s]+\/[^\/\s]+\.js/g, '[FILE]') // Remove file paths
+                     .replace(/api[_-]?key[s]?[:\s=]+[^\s]+/gi, 'API_KEY=[REDACTED]') // Remove API keys
+    };
+}
 
 
 
@@ -353,14 +436,31 @@ function parseFilename(filename) {
 
 
 
+// Debug authentication middleware
+function requireDebugAuth(req, res, next) {
+    const debugKey = process.env.DEBUG_API_KEY;
+    if (!debugKey) {
+        return res.status(503).json({ error: 'Debug endpoints not configured' });
+    }
+    
+    const providedKey = req.headers['x-debug-key'] || req.query.key;
+    if (providedKey !== debugKey) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    next();
+}
+
 // Main parsing endpoint
-app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
+app.post('/parse-receipt', strictLimiter, upload.single('pdf'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No PDF file uploaded' });
         }
 
-        console.log('Processing PDF:', req.file.originalname, 'Size:', req.file.size);
+        // Sanitize filename
+        const originalname = sanitizeFilename(req.file.originalname || 'unknown.pdf');
+        console.log('Processing PDF:', originalname, 'Size:', req.file.size);
 
         // Parse PDF to extract text
         console.log('Parsing PDF content...');
@@ -485,7 +585,7 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
         // Memory cleanup on error
         req.file = null;
 
-        res.status(500).json({ error: error.message });
+        res.status(500).json(sanitizeError(error));
     }
 });
 
@@ -495,7 +595,7 @@ app.get('/health', (req, res) => {
 });
 
 // Debug endpoint to check processed emails
-app.get('/debug/processed-emails', (req, res) => {
+app.get('/debug/processed-emails', requireDebugAuth, (req, res) => {
     res.json({
         processedEmailsCount: processedEmailIds.size,
         processedEmailIds: [...processedEmailIds]
@@ -503,19 +603,25 @@ app.get('/debug/processed-emails', (req, res) => {
 });
 
 // Debug endpoint to clear processed emails (for testing)
-app.post('/debug/clear-processed', (req, res) => {
+app.post('/debug/clear-processed', requireDebugAuth, (req, res) => {
     processedEmailIds.clear();
     saveProcessedEmails(processedEmailIds);
     res.json({ message: 'Cleared processed emails', count: 0 });
 });
 
 // Debug endpoint to test date extraction
-app.post('/debug/test-date-extraction', (req, res) => {
+app.post('/debug/test-date-extraction', requireDebugAuth, (req, res) => {
     const { text, subject, sender, emailDate } = req.body;
 
     if (!text) {
         return res.status(400).json({ error: 'Text is required' });
     }
+    
+    // Sanitize inputs
+    const sanitizedText = sanitizeText(text);
+    const sanitizedSubject = sanitizeText(subject || '');
+    const sanitizedSender = sanitizeText(sender || '');
+    const sanitizedEmailDate = sanitizeText(emailDate || '');
 
     const result = {
         extractEmailDate: extractEmailDate(text, subject || '', sender || ''), // Legacy complex extraction
@@ -528,7 +634,7 @@ app.post('/debug/test-date-extraction', (req, res) => {
 });
 
 // Debug endpoint to test PDFShift with detailed logging
-app.get('/debug/test-pdfshift', async (req, res) => {
+app.get('/debug/test-pdfshift', requireDebugAuth, async (req, res) => {
     try {
         const token = process.env.PDFSHIFT_API_KEY;
         console.log('=== PDFSHIFT DEBUG TEST ===');
@@ -602,7 +708,7 @@ app.get('/debug/test-pdfshift', async (req, res) => {
 });
 
 // Gmail scanning endpoint
-app.post('/scan-gmail', async (req, res) => {
+app.post('/scan-gmail', strictLimiter, async (req, res) => {
     try {
         if (!req.session.googleTokens) {
             return res.status(401).json({ error: 'Not authenticated with Google' });
@@ -610,10 +716,10 @@ app.post('/scan-gmail', async (req, res) => {
 
         console.log('=== GMAIL SCAN STARTED ===');
 
-        // Extract date range from request body
+        // Extract and validate date range from request body
         const { dayRangeFrom, dayRangeTo } = req.body;
-        const fromDays = dayRangeFrom || 7; // Default: 7 days ago
-        const toDays = dayRangeTo || 1;     // Default: 1 day ago
+        const fromDays = Math.max(1, Math.min(90, parseInt(dayRangeFrom) || 7)); // Limit to 1-90 days
+        const toDays = Math.max(0, Math.min(89, parseInt(dayRangeTo) || 1)); // Limit to 0-89 days
         console.log(`Scanning from ${fromDays} to ${toDays} days ago`);
 
         // Set credentials
@@ -1613,12 +1719,18 @@ async function uploadToGoogleDrive(fileBuffer, fileName, receiptDate, tokens) {
 }
 
 // Convert email to PDF endpoint
-app.post('/convert-email-to-pdf', async (req, res) => {
+app.post('/convert-email-to-pdf', strictLimiter, async (req, res) => {
     try {
         const { emailId, emailContent } = req.body;
 
         if (!emailId || !emailContent) {
             return res.status(400).json({ error: 'Email ID and content are required' });
+        }
+        
+        // Sanitize inputs
+        const sanitizedEmailId = sanitizeText(emailId);
+        if (!sanitizedEmailId) {
+            return res.status(400).json({ error: 'Invalid email ID' });
         }
 
         console.log('Converting email to PDF:', emailId);
@@ -1793,12 +1905,12 @@ app.post('/convert-email-to-pdf', async (req, res) => {
 
     } catch (error) {
         console.error('Error converting email to PDF:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(sanitizeError(error));
     }
 });
 
 // Debug endpoint to check PDFShift configuration
-app.get('/debug-pdfshift', (req, res) => {
+app.get('/debug-pdfshift', requireDebugAuth, (req, res) => {
     const apiKey = process.env.PDFSHIFT_API_KEY;
     res.json({
         hasApiKey: !!apiKey,
@@ -1807,6 +1919,21 @@ app.get('/debug-pdfshift', (req, res) => {
     });
 });
 
+// Validate required environment variables
+const requiredEnvVars = ['SESSION_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'PDFSHIFT_API_KEY'];
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+if (missingEnvVars.length > 0) {
+    console.error('❌ Missing required environment variables:', missingEnvVars.join(', '));
+    if (isProduction) {
+        process.exit(1);
+    } else {
+        console.warn('⚠️  Development mode: continuing with missing environment variables');
+    }
+}
+
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Receipt parser server running on port ${PORT}`);
+    console.log(`🚀 Receipt parser server running on port ${PORT}`);
+    console.log(`🔒 Security enabled: ${isProduction ? 'Production' : 'Development'} mode`);
+    console.log(`🛡️  Rate limiting: ${limiter.windowMs / 60000} minutes window, ${limiter.max} requests max`);
 });
