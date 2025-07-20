@@ -108,26 +108,32 @@ if (!isProduction) {
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, etc)
-        if (!origin) return callback(null, true);
+        console.log(`🌐 CORS request from origin: ${origin || 'no origin'}`);
         
-        const isAllowed = allowedOrigins.some(allowed => {
-            if (typeof allowed === 'string') return allowed === origin;
-            return allowed.test(origin);
-        });
+        // TEMPORARY: Allow all origins for debugging
+        console.log(`🔧 Temporarily allowing all origins for debugging`);
+        callback(null, true);
         
-        if (isAllowed) {
-            callback(null, true);
-        } else {
-            console.warn(`❌ Blocked CORS request from: ${origin}`);
-            // Temporarily allow all origins for debugging - REMOVE IN PRODUCTION
-            if (!isProduction) {
-                console.warn(`🔧 Debug mode: allowing blocked origin anyway`);
-                callback(null, true);
-            } else {
-                callback(new Error('Not allowed by CORS'));
-            }
-        }
+        // // Allow requests with no origin (mobile apps, etc)
+        // if (!origin) return callback(null, true);
+        
+        // const isAllowed = allowedOrigins.some(allowed => {
+        //     if (typeof allowed === 'string') return allowed === origin;
+        //     return allowed.test(origin);
+        // });
+        
+        // if (isAllowed) {
+        //     callback(null, true);
+        // } else {
+        //     console.warn(`❌ Blocked CORS request from: ${origin}`);
+        //     // Temporarily allow all origins for debugging - REMOVE IN PRODUCTION
+        //     if (!isProduction) {
+        //         console.warn(`🔧 Debug mode: allowing blocked origin anyway`);
+        //         callback(null, true);
+        //     } else {
+        //         callback(new Error('Not allowed by CORS'));
+        //     }
+        // }
     },
     credentials: true,
     methods: ['GET', 'POST', 'OPTIONS'],
@@ -1623,7 +1629,15 @@ app.get('/auth/google/callback', async (req, res) => {
 // Check authentication status
 app.get('/auth/status', (req, res) => {
     const isAuthenticated = !!(req.session.googleTokens);
-    res.json({ authenticated: isAuthenticated });
+    console.log(`🔍 Auth status check: ${isAuthenticated ? 'AUTHENTICATED' : 'NOT AUTHENTICATED'}`);
+    console.log(`   Origin: ${req.headers.origin || 'no origin'}`);
+    console.log(`   User-Agent: ${req.headers['user-agent']?.substring(0, 50)}...`);
+    console.log(`   Session ID: ${req.sessionID?.substring(0, 8)}...`);
+    res.json({ 
+        authenticated: isAuthenticated,
+        sessionId: req.sessionID?.substring(0, 8),
+        hasTokens: !!(req.session.googleTokens)
+    });
 });
 
 // Token endpoint for extension
