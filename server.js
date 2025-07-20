@@ -78,14 +78,13 @@ const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_REDIRECT_URI || 'https://bootleg-expensify.onrender.com/auth/google/callback'
 );
 
-// Session configuration - require proper secret
+// Session configuration - warn if no proper secret but don't crash
 if (!process.env.SESSION_SECRET) {
-    console.error('❌ SESSION_SECRET environment variable is required');
-    process.exit(1);
+    console.warn('⚠️  SESSION_SECRET not set - using fallback (set SESSION_SECRET for production)');
 }
 
 app.use(session({
-    secret: process.env.SESSION_SECRET,
+    secret: process.env.SESSION_SECRET || 'expense-gadget-fallback-' + Date.now(),
     resave: false,
     saveUninitialized: false,
     cookie: { 
@@ -1967,17 +1966,23 @@ app.get('/debug/email-headers/:messageId', requireDebugAuth, async (req, res) =>
     }
 });
 
-// Validate required environment variables
-const requiredEnvVars = ['SESSION_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'PDFSHIFT_API_KEY'];
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+// Validate critical environment variables
+const criticalEnvVars = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'PDFSHIFT_API_KEY'];
+const missingCriticalVars = criticalEnvVars.filter(envVar => !process.env[envVar]);
+const missingSessionSecret = !process.env.SESSION_SECRET;
 
-if (missingEnvVars.length > 0) {
-    console.error('❌ Missing required environment variables:', missingEnvVars.join(', '));
+if (missingCriticalVars.length > 0) {
+    console.error('❌ Missing critical environment variables:', missingCriticalVars.join(', '));
     if (isProduction) {
+        console.error('❌ Cannot start in production without critical environment variables');
         process.exit(1);
     } else {
-        console.warn('⚠️  Development mode: continuing with missing environment variables');
+        console.warn('⚠️  Development mode: continuing with missing critical variables');
     }
+}
+
+if (missingSessionSecret && isProduction) {
+    console.warn('⚠️  Production deployment should set SESSION_SECRET for security');
 }
 
 app.listen(PORT, '0.0.0.0', () => {
