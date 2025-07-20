@@ -939,16 +939,23 @@ class ExpenseGadget {
             const result = await response.json();
             console.log('Gmail scan result:', result);
 
-            // Hide loading
-            loading.classList.remove('show');
-
-            // Just show summary message, don't display individual results
-            if (result.receiptsProcessed > 0) {
-                this.showScanResults(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails!`);
-            } else if (result.receiptsFound > 0) {
-                this.showScanResults(`Found ${result.receiptsFound} potential receipt emails, but couldn't process them`);
+            // Handle new async response pattern
+            if (result.scanId && result.status === 'processing') {
+                // Show processing message
+                this.showScanResults(`Processing ${result.emailsToProcess} emails in background...`);
+                
+                // Start polling for results
+                this.pollScanResults(result.scanId, loading, gmailScanBtn);
             } else {
-                this.showScanResults(`No receipt emails found`);
+                // Handle old synchronous response (fallback)
+                loading.classList.remove('show');
+                if (result.receiptsProcessed > 0) {
+                    this.showScanResults(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails!`);
+                } else if (result.receiptsFound > 0) {
+                    this.showScanResults(`Found ${result.receiptsFound} potential receipt emails, but couldn't process them`);
+                } else {
+                    this.showScanResults(`No receipt emails found`);
+                }
             }
 
         } catch (error) {
@@ -966,7 +973,81 @@ class ExpenseGadget {
         }
     }
 
+    // Poll scan results until completion
+    async pollScanResults(scanId, loading, gmailScanBtn) {
+        const maxPollTime = 5 * 60 * 1000; // 5 minutes max
+        const pollInterval = 3000; // 3 seconds
+        const startTime = Date.now();
+        let pollCount = 0;
 
+        const poll = async () => {
+            try {
+                pollCount++;
+                console.log(`Polling scan ${scanId} (attempt ${pollCount})`);
+                
+                const response = await fetch(`https://bootleg-expensify.onrender.com/scan-status/${scanId}`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Status check failed: ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log('Scan status:', result);
+
+                if (result.completed) {
+                    // Scan finished
+                    loading.classList.remove('show');
+                    gmailScanBtn.disabled = false;
+                    
+                    const sliderVisible = document.getElementById('scan-slider-container').style.display !== 'none';
+                    gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
+
+                    if (result.error) {
+                        this.showScanResults(`Scan failed: ${result.error}`);
+                    } else if (result.receiptsProcessed > 0) {
+                        this.showScanResults(`✅ Processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails!`);
+                    } else if (result.receiptsFound > 0) {
+                        this.showScanResults(`Found ${result.receiptsFound} emails, but no receipts were processed`);
+                    } else {
+                        this.showScanResults(`No receipt emails found`);
+                    }
+                    return;
+                }
+
+                // Still processing - check if we should continue polling
+                if (Date.now() - startTime > maxPollTime) {
+                    // Timeout
+                    loading.classList.remove('show');
+                    gmailScanBtn.disabled = false;
+                    const sliderVisible = document.getElementById('scan-slider-container').style.display !== 'none';
+                    gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
+                    this.showScanResults(`⏱️ Scan taking longer than expected. Check back later.`);
+                    return;
+                }
+
+                // Update progress message
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                this.showScanResults(`🔄 Processing emails... (${elapsed}s elapsed)`);
+
+                // Continue polling
+                setTimeout(poll, pollInterval);
+
+            } catch (error) {
+                console.error('Polling error:', error);
+                loading.classList.remove('show');
+                gmailScanBtn.disabled = false;
+                const sliderVisible = document.getElementById('scan-slider-container').style.display !== 'none';
+                gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
+                this.showScanResults(`❌ Error checking scan progress: ${error.message}`);
+            }
+        };
+
+        // Start polling
+        setTimeout(poll, pollInterval);
+    }
 
     handleSearchInput(query) {
         // Clear previous debounce timer

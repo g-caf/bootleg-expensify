@@ -80,22 +80,21 @@
         }
         
         .main-content {
-            flex: 1;
-            background: #1a1a1a;
-            padding: 2px 16px 16px 16px;
-            overflow: hidden;
-            box-sizing: border-box;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
+        flex: 1;
+        background: #1a1a1a;
+        padding: 12px 16px 16px 16px;
+        overflow: hidden;
+        box-sizing: border-box;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+            gap: 12px; /* Consistent spacing between all elements */
         }
-        
 
-        
         .search-bar-container {
             display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
+        gap: 8px;
+        margin-bottom: 0; /* Remove margin since we use gap in parent */
         }
         
         .scan-btn {
@@ -131,7 +130,7 @@
         }
         
         .search-section {
-            margin-bottom: 12px;
+            margin-bottom: 0; /* Remove margin since we use gap in parent */
         }
         
         .search-input {
@@ -402,7 +401,7 @@
             border: 1px solid #4b5563;
             border-radius: 8px;
             padding: 12px;
-            margin: 8px 0;
+            margin: 0; /* Remove margin since we use gap in parent */
             transition: all 0.3s ease;
             opacity: 0;
             transform: translateY(-10px);
@@ -555,7 +554,7 @@
         
         /* Scan Results Area */
         .scan-results-area {
-            margin: 12px 0;
+            margin: 0; /* Remove margin since we use gap in parent */
             padding: 8px 12px;
             background: #374151;
             border: 1px solid #4b5563;
@@ -595,51 +594,51 @@
             Looking for receipts...
         </div>
         
-        <div class="search-section">
-            <div class="search-bar-container">
-                <input type="text" class="search-input" id="searchInput" placeholder="Search your email for receipts...">
-                <button class="scan-btn" id="gmailScanBtn" disabled>Connect to Google</button>
-            </div>
-            
-            <!-- Date range slider (initially hidden) -->
-            <div class="date-range-container" id="dateRangeContainer" style="display: none;">
-                <div class="range-header">
-                    <label>Scan from:</label>
-                    <span id="dayDisplay">today to 7 days ago</span>
-                </div>
-                
-                <!-- Dual-handle range slider -->
-                <div class="dual-range-container">
-                    <div class="dual-range-track"></div>
-                    <div class="dual-range-progress" id="rangeProgress"></div>
-                    <!-- Tick marks for common day values (visually evenly distributed) -->
-                    <div class="tick-marks">
-                        <div class="tick-mark" style="left: 20%;" title="7 days"></div>
-                        <div class="tick-mark" style="left: 40%;" title="15 days"></div>
-                        <div class="tick-mark" style="left: 60%;" title="30 days"></div>
-                        <div class="tick-mark" style="left: 80%;" title="60 days"></div>
-                    </div>
-                    <input type="range" id="dayRangeMin" min="0" max="100" value="0" class="dual-range-input">
-                    <input type="range" id="dayRangeMax" min="0" max="100" value="20" class="dual-range-input">
-                </div>
-                
-                <div class="range-labels">
-                    <span>Today</span>
-                    <span class="tick-label" style="left: 20%;">7d</span>
-                    <span class="tick-label" style="left: 40%;">15d</span>
-                    <span class="tick-label" style="left: 60%;">30d</span>
-                    <span class="tick-label" style="left: 80%;">60d</span>
-                    <span>90d ago</span>
-                </div>
-            </div>
-            
-            <!-- Scan results area (below slider) -->
-            <div class="scan-results-area" id="scanResultsArea" style="display: none;">
-                <div class="scan-results-text" id="scanResultsText"></div>
-            </div>
-            
-            <div class="search-results" id="searchResults"></div>
+        <!-- Search bar as direct child -->
+        <div class="search-bar-container">
+            <input type="text" class="search-input" id="searchInput" placeholder="Search your email for receipts...">
+            <button class="scan-btn" id="gmailScanBtn" disabled>Connect to Google</button>
         </div>
+        
+        <!-- Date range slider (initially hidden) -->
+        <div class="date-range-container" id="dateRangeContainer" style="display: none;">
+            <div class="range-header">
+                <label>Scan from:</label>
+                <span id="dayDisplay">today to 7 days ago</span>
+            </div>
+            
+            <!-- Dual-handle range slider -->
+            <div class="dual-range-container">
+                <div class="dual-range-track"></div>
+                <div class="dual-range-progress" id="rangeProgress"></div>
+                <!-- Tick marks for common day values (visually evenly distributed) -->
+                <div class="tick-marks">
+                    <div class="tick-mark" style="left: 20%;" title="7 days"></div>
+                    <div class="tick-mark" style="left: 40%;" title="15 days"></div>
+                    <div class="tick-mark" style="left: 60%;" title="30 days"></div>
+                    <div class="tick-mark" style="left: 80%;" title="60 days"></div>
+                </div>
+                <input type="range" id="dayRangeMin" min="0" max="100" value="0" class="dual-range-input">
+                <input type="range" id="dayRangeMax" min="0" max="100" value="20" class="dual-range-input">
+            </div>
+            
+            <div class="range-labels">
+                <span>Today</span>
+                <span class="tick-label" style="left: 20%;">7d</span>
+                <span class="tick-label" style="left: 40%;">15d</span>
+                <span class="tick-label" style="left: 60%;">30d</span>
+                <span class="tick-label" style="left: 80%;">60d</span>
+                <span>90d ago</span>
+            </div>
+        </div>
+        
+        <!-- Scan results area as direct child -->
+        <div class="scan-results-area" id="scanResultsArea" style="display: none;">
+            <div class="scan-results-text" id="scanResultsText"></div>
+        </div>
+        
+        <!-- Search results as direct child -->
+        <div class="search-results" id="searchResults"></div>
     </div>
     
 
