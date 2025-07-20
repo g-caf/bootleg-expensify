@@ -93,7 +93,30 @@ function extractVendor(text) {
     console.log('  Extracting vendor from text (fallback)...');
 
     // Focus on top section of text where vendor info is most likely
-    const topSection = text.split('\n').slice(0, 10).join('\n');
+    const topSection = text.split('\n').slice(0, 15).join('\n');
+    const fullText = text;
+
+    // Check for common vendors first (important for forwarded emails)
+    const commonVendors = [
+        { name: 'DoorDash', patterns: [/doordash/i, /door\s*dash/i, /dasher/i] },
+        { name: 'Uber Eats', patterns: [/uber\s*eats/i, /ubereats/i] },
+        { name: 'Grubhub', patterns: [/grubhub/i, /grub\s*hub/i] },
+        { name: 'Instacart', patterns: [/instacart/i, /your shopper/i] },
+        { name: 'Amazon', patterns: [/amazon/i, /amazon\.com/i] },
+        { name: 'Starbucks', patterns: [/starbucks/i, /sbux/i] },
+        { name: 'Target', patterns: [/target/i] },
+        { name: 'Walmart', patterns: [/walmart/i, /wal\s*mart/i] }
+    ];
+
+    // Check common vendors in full text first
+    for (const vendor of commonVendors) {
+        for (const pattern of vendor.patterns) {
+            if (pattern.test(fullText)) {
+                console.log(`      Found common vendor: ${vendor.name}`);
+                return vendor.name;
+            }
+        }
+    }
 
     // Simple business name patterns
     const businessPatterns = [
