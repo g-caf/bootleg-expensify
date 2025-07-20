@@ -69,6 +69,43 @@ function saveProcessedEmails(emailIds) {
 // Initialize processed emails set
 const processedEmailIds = loadProcessedEmails();
 console.log(`Loaded ${processedEmailIds.size} previously processed email IDs`);
+
+// Basic caches for performance optimization
+const gmailMessageCache = new Map(); // Cache Gmail message details for 1 hour
+const vendorExtractionCache = new Map(); // Cache vendor extraction results
+const amountExtractionCache = new Map(); // Cache amount extraction results
+
+// Cache cleanup intervals (1 hour)
+const CACHE_TTL = 60 * 60 * 1000;
+
+// Clean up caches periodically
+setInterval(() => {
+    const now = Date.now();
+    
+    // Clean Gmail message cache
+    for (const [key, value] of gmailMessageCache.entries()) {
+        if (now - value.timestamp > CACHE_TTL) {
+            gmailMessageCache.delete(key);
+        }
+    }
+    
+    // Clean vendor extraction cache
+    for (const [key, value] of vendorExtractionCache.entries()) {
+        if (now - value.timestamp > CACHE_TTL) {
+            vendorExtractionCache.delete(key);
+        }
+    }
+    
+    // Clean amount extraction cache
+    for (const [key, value] of amountExtractionCache.entries()) {
+        if (now - value.timestamp > CACHE_TTL) {
+            amountExtractionCache.delete(key);
+        }
+    }
+    
+    console.log(`Cache cleanup: Gmail:${gmailMessageCache.size}, Vendor:${vendorExtractionCache.size}, Amount:${amountExtractionCache.size}`);
+}, CACHE_TTL);
+
 console.log('Auth token endpoint available at /auth/token');
 
 // Google OAuth configuration
@@ -197,6 +234,14 @@ function sanitizeError(error) {
 // Extract vendor from text (simplified fallback)
 function extractVendor(text) {
     console.log('  Extracting vendor from text (fallback)...');
+    
+    // Check cache first
+    const cacheKey = `vendor_${text.substring(0, 100)}`;
+    const cached = vendorExtractionCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+        console.log('  📦 Using cached vendor extraction');
+        return cached.result;
+    }
 
     // Focus on top section of text where vendor info is most likely
     const topSection = text.split('\n').slice(0, 15).join('\n');
@@ -242,18 +287,41 @@ function extractVendor(text) {
             
             if (vendor.length > 1 && vendor.length < 30) {
                 console.log(`      Found business vendor: ${vendor}`);
-                return vendor.charAt(0).toUpperCase() + vendor.slice(1).toLowerCase();
+                const result = vendor.charAt(0).toUpperCase() + vendor.slice(1).toLowerCase();
+                
+                // Cache the result
+                vendorExtractionCache.set(cacheKey, {
+                    result: result,
+                    timestamp: Date.now()
+                });
+                
+                return result;
             }
         }
     }
 
     console.log('      No vendor found in text');
+    
+    // Cache null result too
+    vendorExtractionCache.set(cacheKey, {
+        result: null,
+        timestamp: Date.now()
+    });
+    
     return null;
 }
 
 // Extract amount from text
 function extractAmount(text) {
     console.log('  Extracting amount from text...');
+    
+    // Check cache first
+    const cacheKey = `amount_${text.substring(0, 200)}`;
+    const cached = amountExtractionCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+        console.log('  📦 Using cached amount extraction');
+        return cached.result;
+    }
 
     // First, look for subtotal as an indicator
     const subtotalMatch = text.match(/(?:Sub\s*)?total[:\s]*\$(\d+\.\d{2})/i);
@@ -289,7 +357,15 @@ function extractAmount(text) {
                 // Final total should be >= subtotal (with taxes, fees, etc.)
                 if (amount >= subtotalAmount) {
                     console.log(`    Found final total: $${amount.toFixed(2)} (subtotal was $${subtotalAmount.toFixed(2)})`);
-                    return amount.toFixed(2);
+                    const result = amount.toFixed(2);
+                    
+                    // Cache the result
+                    amountExtractionCache.set(cacheKey, {
+                        result: result,
+                        timestamp: Date.now()
+                    });
+                    
+                    return result;
                 } else {
                     console.log(`    Skipping amount $${amount.toFixed(2)} (less than subtotal $${subtotalAmount.toFixed(2)})`);
                 }
@@ -297,7 +373,15 @@ function extractAmount(text) {
         }
 
         console.log('    No final total found after subtotal, using subtotal as fallback');
-        return subtotalMatch[1];
+        const result = subtotalMatch[1];
+        
+        // Cache the result
+        amountExtractionCache.set(cacheKey, {
+            result: result,
+            timestamp: Date.now()
+        });
+        
+        return result;
     }
 
     // If no subtotal found, use the original priority-based approach
@@ -364,11 +448,26 @@ function extractAmount(text) {
             // For others, use the largest amount
             const finalAmount = group.name === 'high-priority' ? amounts[0] : Math.max(...amounts);
             console.log(`    Found ${group.name} amount: $${finalAmount.toFixed(2)}`);
-            return finalAmount.toFixed(2);
+            const result = finalAmount.toFixed(2);
+            
+            // Cache the result
+            amountExtractionCache.set(cacheKey, {
+                result: result,
+                timestamp: Date.now()
+            });
+            
+            return result;
         }
     }
 
     console.log('    No amount found');
+    
+    // Cache null result too
+    amountExtractionCache.set(cacheKey, {
+        result: null,
+        timestamp: Date.now()
+    });
+    
     return null;
 }
 
@@ -804,27 +903,43 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
         let processedCount = 0;
         let emailIndex = 0;
 
-        // Process each email - limit based on date range to avoid overwhelming the system  
+        // Process emails in parallel - limit based on date range to avoid overwhelming the system  
         const emailsToProcess = Math.min(50, Math.max(10, Math.floor(daySpan / 2))); // 1 email per 2 days, min 10, max 50
         console.log(`Processing first ${emailsToProcess} emails out of ${searchResponse.data.messages.length} found`);
 
-        for (const message of searchResponse.data.messages.slice(0, emailsToProcess)) {
-            emailIndex++;
+        // Process emails in parallel with concurrency limit
+        const processEmail = async (message, index) => {
             try {
-                console.log(`\n=== EMAIL ${emailIndex}/${emailsToProcess} ===`);
+                console.log(`\n=== EMAIL ${index + 1}/${emailsToProcess} ===`);
                 console.log(`Processing message ID: ${message.id}`);
 
                 // Check if we've already processed this email
                 if (processedEmailIds.has(message.id)) {
                     console.log(`  ❌ SKIPPED: Already processed email: ${message.id}`);
-                    continue;
+                    return null;
                 }
 
-                // Get full message details
-                const messageDetails = await gmail.users.messages.get({
-                    userId: 'me',
-                    id: message.id
-                });
+                // Get full message details (with caching)
+                let messageDetails;
+                const cacheKey = `gmail_${message.id}`;
+                const cachedMessage = gmailMessageCache.get(cacheKey);
+                
+                if (cachedMessage && (Date.now() - cachedMessage.timestamp) < CACHE_TTL) {
+                    messageDetails = cachedMessage.data;
+                    console.log(`  📦 Using cached message details`);
+                } else {
+                    messageDetails = await gmail.users.messages.get({
+                        userId: 'me',
+                        id: message.id
+                    });
+                    
+                    // Cache the result
+                    gmailMessageCache.set(cacheKey, {
+                        data: messageDetails,
+                        timestamp: Date.now()
+                    });
+                    console.log(`  💾 Cached message details`);
+                }
 
                 const msg = messageDetails.data;
                 const subject = getHeader(msg.payload.headers, 'Subject') || 'Unknown Subject';
@@ -844,88 +959,174 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
                     console.log(`  🔄 Original sender: ${originalSender}`);
                 }
 
-                // Process the email content itself (convert HTML to PDF)
-                try {
-                    console.log(`    🔄 Processing email content to PDF`);
-
-                    // Extract email HTML content
-                    const emailHTML = extractEmailHTML(msg.payload);
-                    if (!emailHTML || emailHTML.trim().length === 0) {
-                        console.log(`    ❌ No HTML content found in email`);
-                        continue;
-                    }
-
-                    console.log(`    ✅ HTML content extracted: ${emailHTML.length} characters`);
-
-                    // Convert HTML email to PDF and process
-                    const processed = await processEmailContent(emailHTML, subject, sender, req.session.googleTokens, date, originalSender);
-
-                    console.log(`    📊 Processing result: ${processed.success ? '✅ SUCCESS' : '❌ FAILED'}`);
-                    if (processed.vendor) console.log(`       Vendor: ${processed.vendor}`);
-                    if (processed.amount) console.log(`       Amount: ${processed.amount}`);
-                    if (processed.receiptDate) console.log(`       Date: ${processed.receiptDate}`);
-                    if (processed.error) console.log(`       Error: ${processed.error}`);
-
-                    results.push({
-                        messageId: message.id,
-                        subject: subject,
-                        sender: sender,
-                        processed: processed.success,
-                        vendor: processed.vendor,
-                        amount: processed.amount,
-                        receiptDate: processed.receiptDate,
-                        filename: processed.filename,
-                        emailContent: processed.emailContent,
-                        htmlContent: processed.htmlContent,
-                        googleDrive: processed.googleDrive,
-                        error: processed.error
-                    });
-
-                    if (processed.success) {
-                        processedCount++;
-                        // Mark email as processed to prevent duplicates
-                        processedEmailIds.add(message.id);
-                        saveProcessedEmails(processedEmailIds);
-                        console.log(`    💾 Saved email ID to processed list`);
-                    }
-
-                } catch (emailError) {
-                    console.error(`Error processing email content:`, emailError);
-                    results.push({
-                        messageId: message.id,
-                        subject: subject,
-                        sender: sender,
-                        processed: false,
-                        error: emailError.message
-                    });
+                // Extract email HTML content
+                const emailHTML = extractEmailHTML(msg.payload);
+                if (!emailHTML || emailHTML.trim().length === 0) {
+                    console.log(`    ❌ No HTML content found in email`);
+                    return null;
                 }
 
-            } catch (messageError) {
-                console.error(`Error processing message ${message.id}:`, messageError);
-                results.push({
+                console.log(`    ✅ HTML content extracted: ${emailHTML.length} characters`);
+
+                // Convert HTML email to PDF and process
+                console.log(`    🔄 Processing email content to PDF`);
+                const processed = await processEmailContent(emailHTML, subject, sender, req.session.googleTokens, date, originalSender);
+
+                console.log(`    📊 Processing result: ${processed.success ? '✅ SUCCESS' : '❌ FAILED'}`);
+                if (processed.vendor) console.log(`       Vendor: ${processed.vendor}`);
+                if (processed.amount) console.log(`       Amount: ${processed.amount}`);
+                if (processed.receiptDate) console.log(`       Date: ${processed.receiptDate}`);
+                if (processed.error) console.log(`       Error: ${processed.error}`);
+
+                const result = {
+                    messageId: message.id,
+                    subject: subject,
+                    sender: sender,
+                    processed: processed.success,
+                    vendor: processed.vendor,
+                    amount: processed.amount,
+                    receiptDate: processed.receiptDate,
+                    filename: processed.filename,
+                    emailContent: processed.emailContent,
+                    htmlContent: processed.htmlContent,
+                    googleDrive: processed.googleDrive,
+                    error: processed.error
+                };
+
+                if (processed.success) {
+                    // Mark email as processed to prevent duplicates
+                    processedEmailIds.add(message.id);
+                    saveProcessedEmails(processedEmailIds);
+                    console.log(`    💾 Saved email ID to processed list`);
+                }
+
+                return result;
+
+            } catch (error) {
+                console.error(`Error processing message ${message.id}:`, error);
+                return {
                     messageId: message.id,
                     processed: false,
-                    error: messageError.message
-                });
+                    error: error.message
+                };
             }
-        }
+        };
 
-        console.log(`=== GMAIL SCAN COMPLETE ===`);
-        console.log(`Processed ${processedCount} receipts from ${searchResponse.data.messages.length} emails`);
-
+        // Return immediate response and process in background
+        const scanId = `scan_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+        
+        // Send immediate response
         res.json({
             success: true,
+            scanId: scanId,
+            status: 'processing',
             receiptsFound: searchResponse.data.messages.length,
-            receiptsProcessed: processedCount,
+            emailsToProcess: emailsToProcess,
+            message: 'Scan started. Processing emails in background.',
             dayRangeFrom: fromDays,
             dayRangeTo: toDays,
-            daySpan: daySpan,
-            results: results
+            daySpan: daySpan
         });
+
+        // Continue processing in background (don't await)
+        (async () => {
+            try {
+                console.log(`\n🚀 Background processing started for scan ${scanId}`);
+                
+                // Process emails in parallel with concurrency limit of 5 to avoid overwhelming APIs
+                const batchSize = 5;
+                const emailsToProcessArray = searchResponse.data.messages.slice(0, emailsToProcess);
+                
+                for (let i = 0; i < emailsToProcessArray.length; i += batchSize) {
+                    const batch = emailsToProcessArray.slice(i, i + batchSize);
+                    const batchPromises = batch.map((message, index) => processEmail(message, i + index));
+                    
+                    try {
+                        const batchResults = await Promise.all(batchPromises);
+                        const validResults = batchResults.filter(result => result !== null);
+                        results.push(...validResults);
+                        
+                        // Count successful processes
+                        const successfulInBatch = validResults.filter(result => result.processed).length;
+                        processedCount += successfulInBatch;
+                        
+                        console.log(`\n🏁 Batch ${Math.floor(i/batchSize) + 1} complete: ${successfulInBatch}/${batch.length} successful`);
+                    } catch (batchError) {
+                        console.error(`Error processing batch starting at index ${i}:`, batchError);
+                        // Add error results for failed batch
+                        batch.forEach((message, index) => {
+                            results.push({
+                                messageId: message.id,
+                                processed: false,
+                                error: `Batch processing failed: ${batchError.message}`
+                            });
+                        });
+                    }
+                }
+
+                console.log(`=== GMAIL SCAN COMPLETE ===`);
+                console.log(`Scan ${scanId}: Processed ${processedCount} receipts from ${searchResponse.data.messages.length} emails`);
+                
+                // Store results for later retrieval (simple in-memory cache)
+                if (!global.scanResults) global.scanResults = new Map();
+                global.scanResults.set(scanId, {
+                    completed: true,
+                    completedAt: new Date(),
+                    receiptsFound: searchResponse.data.messages.length,
+                    receiptsProcessed: processedCount,
+                    dayRangeFrom: fromDays,
+                    dayRangeTo: toDays,
+                    daySpan: daySpan,
+                    results: results
+                });
+                
+                // Clean up old results (keep only last 10)
+                if (global.scanResults.size > 10) {
+                    const oldestKey = global.scanResults.keys().next().value;
+                    global.scanResults.delete(oldestKey);
+                }
+                
+            } catch (backgroundError) {
+                console.error(`Background processing error for scan ${scanId}:`, backgroundError);
+                // Store error result
+                if (!global.scanResults) global.scanResults = new Map();
+                global.scanResults.set(scanId, {
+                    completed: true,
+                    completedAt: new Date(),
+                    error: backgroundError.message
+                });
+            }
+        })();
 
     } catch (error) {
         console.error('Gmail scan error:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// Endpoint to check scan status and get results
+app.get('/scan-status/:scanId', requireAuth, (req, res) => {
+    try {
+        const { scanId } = req.params;
+        
+        if (!global.scanResults || !global.scanResults.has(scanId)) {
+            return res.status(404).json({
+                success: false,
+                error: 'Scan not found'
+            });
+        }
+        
+        const scanResult = global.scanResults.get(scanId);
+        
+        res.json({
+            success: true,
+            scanId: scanId,
+            ...scanResult
+        });
+        
+    } catch (error) {
+        console.error('Scan status error:', error);
+        res.status(500).json({ error: sanitizeError(error) });
     }
 });
 
