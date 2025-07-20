@@ -822,9 +822,8 @@ class ExpenseGadget {
             // Display scan results in the search results area
             const rangeText = result.daySpan ? ` from ${result.dayRangeFrom} to ${result.dayRangeTo} days ago (${result.daySpan} day${result.daySpan > 1 ? 's' : ''})` : '';
 
-            if (result.results && result.results.length > 0) {
-                // Display the actual email results
-                this.displayScanResults(result.results);
+            // Just show summary message, don't display individual results
+            if (result.receiptsProcessed > 0) {
                 this.showScanResults(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails${rangeText}!`);
             } else if (result.receiptsFound > 0) {
                 this.showScanResults(`Found ${result.receiptsFound} potential receipt emails${rangeText}, but couldn't process them`);
