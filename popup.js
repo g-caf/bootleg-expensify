@@ -953,6 +953,16 @@ class ExpenseGadget {
         }, 8000);
     }
 
+    hideScanResults() {
+        const scanResultsArea = document.getElementById('scanResultsArea');
+        if (scanResultsArea) {
+            scanResultsArea.classList.remove('show');
+            setTimeout(() => {
+                scanResultsArea.style.display = 'none';
+            }, 300);
+        }
+    }
+
     // Mapping functions between slider position (0-100) and actual days
     sliderPositionToDays(position) {
         const mappingPoints = [
@@ -1022,10 +1032,10 @@ class ExpenseGadget {
 
             // Handle new async response pattern
             if (result.scanId && result.status === 'processing') {
-                // Show processing message
+                // Show initial processing message
                 this.showScanResults(`Processing ${result.emailsToProcess} emails in background...`);
                 
-                // Start polling for results
+                // Start polling for results (will clear the message)
                 this.pollScanResults(result.scanId, gmailScanBtn);
             } else {
                 // Handle old synchronous response (fallback)
@@ -1059,6 +1069,11 @@ class ExpenseGadget {
         const startTime = Date.now();
         let pollCount = 0;
 
+        // Clear the processing message after a short delay
+        setTimeout(() => {
+            this.hideScanResults();
+        }, 2000);
+
         const poll = async () => {
             try {
                 pollCount++;
@@ -1088,21 +1103,13 @@ class ExpenseGadget {
                 console.log('Scan status:', result);
 
                 if (result.completed) {
-                    // Scan finished
+                    // Scan finished silently
                     gmailScanBtn.disabled = false;
                     
                     const sliderVisible = document.getElementById('dateRangeContainer').style.display !== 'none';
                     gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
 
-                    if (result.error) {
-                        this.showScanResults(`Scan failed: ${result.error}`);
-                    } else if (result.receiptsProcessed > 0) {
-                        this.showScanResults(`✅ Processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails!`);
-                    } else if (result.receiptsFound > 0) {
-                        this.showScanResults(`Found ${result.receiptsFound} emails, but no receipts were processed`);
-                    } else {
-                        this.showScanResults(`No receipt emails found`);
-                    }
+                    // No completion messages - scan finishes silently
                     return;
                 }
 
@@ -1116,11 +1123,7 @@ class ExpenseGadget {
                     return;
                 }
 
-                // Update progress message
-                const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                this.showScanResults(`🔄 Processing emails... (${elapsed}s elapsed)`);
-
-                // Continue polling
+                // Continue polling silently (no progress updates)
                 setTimeout(poll, pollInterval);
 
             } catch (error) {
