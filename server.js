@@ -6,7 +6,7 @@ const session = require('express-session');
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
-const htmlPdf = require('html-pdf');
+
 
 
 const app = express();
@@ -1243,34 +1243,17 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
         let pdfBuffer = null;
         let usedPDFShift = false;
 
-        try {
-            // Try PDFShift first for best results
-            console.log(`    📄 Attempting PDFShift PDF generation...`);
-            pdfBuffer = await createEmailReceiptPDFWithPDFShift({
-                sender,
-                subject,
-                vendor: vendor || 'Not found',
-                amount: amount || 'Not found',
-                receiptDate: receiptDate || 'Not found',
-                emailContent: text.substring(0, 1500),
-                htmlContent: htmlContent // Pass raw HTML for better rendering
-            });
-            usedPDFShift = true;
-            console.log(`    ✅ PDFShift PDF generation successful!`);
-        } catch (pdfshiftError) {
-            console.log(`    ⚠️  PDFShift failed, falling back to html-pdf: ${pdfshiftError.message}`);
-
-            // Fallback to html-pdf
-            pdfBuffer = await createEmailReceiptPDF({
-                sender,
-                subject,
-                vendor: vendor || 'Not found',
-                amount: amount || 'Not found',
-                receiptDate: receiptDate || 'Not found',
-                emailContent: text.substring(0, 1500)
-            });
-            console.log(`    📄 html-pdf fallback used`);
-        }
+        // Generate PDF with PDFShift
+        pdfBuffer = await createEmailReceiptPDFWithPDFShift({
+            sender,
+            subject,
+            vendor: vendor || 'Not found',
+            amount: amount || 'Not found',
+            receiptDate: receiptDate || 'Not found',
+            emailContent: text.substring(0, 1500),
+            htmlContent: htmlContent // Pass raw HTML for better rendering
+        });
+        usedPDFShift = true;
 
         console.log(`    Generated PDF: ${pdfBuffer.length} bytes (${usedPDFShift ? 'PDFShift' : 'html-pdf'})`);
 
@@ -1337,14 +1320,11 @@ function formatDateForFilename(dateInput) {
 
 // Helper function to extract vendor from email sender
 function extractVendorFromSender(sender) {
-    console.log(`    Extracting vendor from sender: ${sender}`);
-
     // Extract domain from email address
     const emailMatch = sender.match(/@([^>.\s]+\.[^>.\s]+)/);
     if (!emailMatch) return null;
     
     const domain = emailMatch[1].toLowerCase();
-    console.log(`      Extracted domain: ${domain}`);
 
     // Comprehensive domain-to-vendor mapping
     const domainMappings = {
@@ -1404,14 +1384,12 @@ function extractVendorFromSender(sender) {
 
     // Check exact domain match first
     if (domainMappings[domain]) {
-        console.log(`      Found vendor from domain mapping: ${domainMappings[domain]}`);
         return domainMappings[domain];
     }
 
     // Check if domain contains known vendor names
     for (const [vendorDomain, vendorName] of Object.entries(domainMappings)) {
         if (domain.includes(vendorDomain.split('.')[0])) {
-            console.log(`      Found vendor from domain substring: ${vendorName}`);
             return vendorName;
         }
     }
@@ -1420,7 +1398,6 @@ function extractVendorFromSender(sender) {
     const companyName = domain.split('.')[0];
     if (companyName && companyName.length > 2) {
         const vendor = companyName.charAt(0).toUpperCase() + companyName.slice(1);
-        console.log(`      Extracted vendor from domain: ${vendor}`);
         return vendor;
     }
 
@@ -2198,79 +2175,39 @@ app.post('/convert-email-to-pdf', async (req, res) => {
         const htmlContent = emailContent.body || 'No content available';
         const text = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
         
-        console.log(`=== CONVERT-TO-PDF DEBUG ===`);
-        console.log(`Email from: "${emailContent.from}"`);
-        console.log(`Email subject: "${emailContent.subject}"`);
-        console.log(`Text length: ${text.length}`);
-        console.log(`Text sample: "${text.substring(0, 100)}..."`);
-        
         // Try to extract vendor, amount, and date for better naming
-        console.log(`--- Step 1: Extract from email text ---`);
         let vendor = extractVendor(text);
-        console.log(`Vendor from text: ${vendor}`);
-        
-        console.log(`--- Step 2: Extract amount ---`);
         let amount = extractAmount(text);
-        console.log(`Amount extracted: ${amount}`);
-        
-        console.log(`--- Step 3: Extract date ---`);
         let receiptDate = extractEmailDate(text, emailContent.subject, emailContent.from, htmlContent);
-        console.log(`Date extracted: ${receiptDate}`);
         
         // Enhanced vendor extraction
-        console.log(`--- Step 4: Try vendor from sender ---`);
         if (!vendor && emailContent.from) {
-            console.log(`Attempting vendor extraction from sender: "${emailContent.from}"`);
             vendor = extractVendorFromSender(emailContent.from);
-            console.log(`Vendor from sender result: ${vendor}`);
         }
-        
-        console.log(`--- Step 5: Try vendor from subject ---`);
         if (!vendor && emailContent.subject) {
-            console.log(`Attempting vendor extraction from subject: "${emailContent.subject}"`);
             vendor = extractVendorFromSubject(emailContent.subject);
-            console.log(`Vendor from subject result: ${vendor}`);
         }
-        
-        console.log(`--- Step 6: Try context analysis ---`);
         if (!vendor && text.length > 50) {
-            console.log(`Attempting context analysis on text...`);
             const contextVendor = analyzeContext(text);
             if (contextVendor) {
                 vendor = contextVendor;
-                console.log(`Vendor from context: ${vendor}`);
-            } else {
-                console.log(`No vendor found from context analysis`);
             }
         }
 
-        console.log(`=== FINAL EXTRACTION RESULTS ===`);
-        console.log(`Final vendor: ${vendor}`);
-        console.log(`Final amount: ${amount}`);
-        console.log(`Final date: ${receiptDate}`);
-
         // Create smart filename
-        console.log(`=== FILENAME CREATION DEBUG ===`);
-        console.log(`Has vendor: ${!!vendor}, Has amount: ${!!amount}`);
         
         let outputFilename;
         if (vendor && amount) {
             const dateStr = formatDateForFilename(receiptDate);
             outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
-            console.log(`Using vendor+amount filename: ${outputFilename}`);
         } else if (vendor) {
             const dateStr = formatDateForFilename(receiptDate);
             outputFilename = `${vendor} ${dateStr}.pdf`;
-            console.log(`Using vendor-only filename: ${outputFilename}`);
         } else {
             const dateStr = formatDateForFilename(receiptDate);
             const subject = emailContent.subject || 'Email';
             outputFilename = `${subject.substring(0, 30)} ${dateStr}.pdf`;
-            console.log(`Using fallback subject filename: ${outputFilename}`);
         }
-
-        console.log(`=== FINAL FILENAME BEFORE PDF GENERATION ===`);
-        console.log(`Output filename: "${outputFilename}"`);
 
         // Clean and process email body
         let cleanBody = htmlContent;
@@ -2363,76 +2300,34 @@ app.post('/convert-email-to-pdf', async (req, res) => {
       </html>
     `;
 
-        // Convert HTML to PDF with fallback strategy
-        let pdfBuffer;
+        // Convert HTML to PDF with PDFShift
         const pdfshiftToken = process.env.PDFSHIFT_API_KEY;
+        const response = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${Buffer.from('api:' + pdfshiftToken).toString('base64')}`
+            },
+            body: JSON.stringify({
+                source: pdfHtmlContent,
+                format: 'A4',
+                margin: '0.2in'
+            })
+        });
 
-        // Try PDFShift first
-        if (pdfshiftToken && pdfshiftToken !== 'YOUR_PDFSHIFT_KEY') {
-            try {
-                console.log('Attempting PDF generation with PDFShift');
-                const response = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Basic ${Buffer.from('api:' + pdfshiftToken).toString('base64')}`
-                    },
-                    body: JSON.stringify({
-                        source: pdfHtmlContent,
-                        format: 'A4',
-                        margin: '0.2in'
-                    })
-                });
-
-                if (response.ok) {
-                    const arrayBuffer = await response.arrayBuffer();
-                    pdfBuffer = Buffer.from(arrayBuffer);
-                    console.log('✅ PDF generated successfully with PDFShift');
-                } else {
-                    const errorText = await response.text();
-                    console.error('PDFShift failed:', response.status, errorText);
-                    throw new Error(`PDFShift API error: ${response.status}`);
-                }
-            } catch (pdfshiftError) {
-                console.error('PDFShift error, falling back to html-pdf:', pdfshiftError.message);
-                pdfBuffer = null; // Will trigger fallback
-            }
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`PDFShift API error: ${response.status} - ${errorText}`);
         }
 
-        // Fallback to html-pdf if Browserless.io failed or not configured
-        if (!pdfBuffer) {
-            console.log('Using html-pdf fallback for PDF generation');
-            pdfBuffer = await new Promise((resolve, reject) => {
-                htmlPdf.create(pdfHtmlContent, {
-                    format: 'A4',
-                    border: {
-                        top: '0.5in',
-                        right: '0.5in',
-                        bottom: '0.5in',
-                        left: '0.5in'
-                    }
-                }).toBuffer((err, buffer) => {
-                    if (err) {
-                        console.error('html-pdf error:', err);
-                        reject(err);
-                    } else {
-                        console.log('✅ PDF generated successfully with html-pdf fallback');
-                        resolve(buffer);
-                    }
-                });
-            });
-        }
-
-        // Use our smart filename for Google Drive upload
-        console.log(`=== GOOGLE DRIVE UPLOAD DEBUG ===`);
-        console.log(`Using smart filename for upload: "${outputFilename}"`);
-        const date = formatDateForFilename(receiptDate);
+        const arrayBuffer = await response.arrayBuffer();
+        const pdfBuffer = Buffer.from(arrayBuffer);
 
         // Upload to Google Drive if user is authenticated
+        const date = formatDateForFilename(receiptDate);
         let driveUpload = null;
         if (req.session.googleTokens) {
             try {
-                console.log(`Uploading to Google Drive with filename: "${outputFilename}"`);
                 driveUpload = await uploadToGoogleDrive(pdfBuffer, outputFilename, date, req.session.googleTokens);
             } catch (driveError) {
                 console.error('Google Drive upload failed:', driveError);
@@ -2440,9 +2335,6 @@ app.post('/convert-email-to-pdf', async (req, res) => {
             }
         }
 
-        console.log(`=== FINAL RESPONSE ===`);
-        console.log(`Returning filename: "${outputFilename}"`);
-        
         res.json({
             success: true,
             filename: outputFilename,
