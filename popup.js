@@ -909,9 +909,11 @@ class ExpenseGadget {
         const endDays = this.sliderPositionToDays(endPos); // Convert to actual days
         console.log(`Scanning from ${startDays === 0 ? 'today' : startDays + ' days ago'} backward to ${endDays} days ago`);
 
-        // Clear search results and show loading
+        // Clear search results and show scan progress in results area
         searchResults.innerHTML = '';
-        loading.classList.add('show');
+        
+        // Show scan results area immediately with initial message
+        this.showScanResults('🔍 Looking for receipts...');
 
         // Keep date range slider visible during scan
 
@@ -945,10 +947,9 @@ class ExpenseGadget {
                 this.showScanResults(`Processing ${result.emailsToProcess} emails in background...`);
                 
                 // Start polling for results
-                this.pollScanResults(result.scanId, loading, gmailScanBtn);
+                this.pollScanResults(result.scanId, gmailScanBtn);
             } else {
                 // Handle old synchronous response (fallback)
-                loading.classList.remove('show');
                 if (result.receiptsProcessed > 0) {
                     this.showScanResults(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails!`);
                 } else if (result.receiptsFound > 0) {
@@ -960,8 +961,7 @@ class ExpenseGadget {
 
         } catch (error) {
             console.error('Gmail scan error:', error);
-            loading.classList.remove('show');
-            this.showStatus('Failed to scan Gmail. Check your connection.');
+            this.showScanResults(`❌ Failed to scan Gmail. Check your connection.`);
         } finally {
             // Re-enable button but keep state based on slider visibility
             gmailScanBtn.disabled = false;
@@ -974,7 +974,7 @@ class ExpenseGadget {
     }
 
     // Poll scan results until completion
-    async pollScanResults(scanId, loading, gmailScanBtn) {
+    async pollScanResults(scanId, gmailScanBtn) {
         const maxPollTime = 5 * 60 * 1000; // 5 minutes max
         const pollInterval = 3000; // 3 seconds
         const startTime = Date.now();
@@ -999,10 +999,9 @@ class ExpenseGadget {
 
                 if (result.completed) {
                     // Scan finished
-                    loading.classList.remove('show');
                     gmailScanBtn.disabled = false;
                     
-                    const sliderVisible = document.getElementById('scan-slider-container').style.display !== 'none';
+                    const sliderVisible = document.getElementById('dateRangeContainer').style.display !== 'none';
                     gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
 
                     if (result.error) {
@@ -1020,9 +1019,8 @@ class ExpenseGadget {
                 // Still processing - check if we should continue polling
                 if (Date.now() - startTime > maxPollTime) {
                     // Timeout
-                    loading.classList.remove('show');
                     gmailScanBtn.disabled = false;
-                    const sliderVisible = document.getElementById('scan-slider-container').style.display !== 'none';
+                    const sliderVisible = document.getElementById('dateRangeContainer').style.display !== 'none';
                     gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
                     this.showScanResults(`⏱️ Scan taking longer than expected. Check back later.`);
                     return;
@@ -1037,7 +1035,6 @@ class ExpenseGadget {
 
             } catch (error) {
                 console.error('Polling error:', error);
-                loading.classList.remove('show');
                 gmailScanBtn.disabled = false;
                 const sliderVisible = document.getElementById('scan-slider-container').style.display !== 'none';
                 gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
