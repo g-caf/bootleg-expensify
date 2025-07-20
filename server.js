@@ -860,6 +860,9 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
             // Forwarded DoorDash emails - look for DoorDash content in forwarded emails
             '(subject:Fwd OR subject:"Forwarded message") AND (DoorDash OR doordash.com OR "Order confirmed" OR "Your DoorDash receipt")',
             ') OR (',
+            // Broad DoorDash search - catch any email containing DoorDash (like manual search)
+            'DoorDash',
+            ') OR (',
             // Instacart receipts  
             'from:instacart.com (subject:receipt OR subject:"Your Instacart order receipt" OR subject:"Order receipt")',
             ')',
