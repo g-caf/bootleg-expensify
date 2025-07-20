@@ -1221,12 +1221,19 @@ async function processEmailContent(htmlContent, subject, sender, tokens, emailDa
         console.log(`    Final extraction: vendor=${vendor}, amount=${amount}, date=${receiptDate}`);
 
         // Skip emails without amounts - they're not receipts
-        if (!amount) {
+        // Exception: Allow DoorDash emails even without amounts (forwarded emails might have extraction issues)
+        const isDoorDashEmail = text.toLowerCase().includes('doordash') || 
+                               subject.toLowerCase().includes('doordash') || 
+                               sender.toLowerCase().includes('doordash');
+        
+        if (!amount && !isDoorDashEmail) {
             console.log(`    ❌ No amount found - skipping as this is not a receipt`);
             return {
                 success: false,
                 error: 'No amount found - not a receipt'
             };
+        } else if (!amount && isDoorDashEmail) {
+            console.log(`    ⚠️ DoorDash email with no amount found - processing anyway`);
         }
 
         // Create output filename
