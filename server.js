@@ -1665,7 +1665,7 @@ async function createEmailReceiptPDFWithPDFShift(data) {
             body: JSON.stringify({
                 source: emailHtml,
                 format: 'A4',
-                margin: '0.5in'
+                margin: '0.2in'
             })
         });
 
@@ -1704,63 +1704,77 @@ function createEmailHTML(data) {
   <title>Email Receipt</title>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: Arial, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 8px;
       background: white;
       color: #333;
-      line-height: 1.5;
+      line-height: 1.1;
+      font-size: 9px;
     }
     .email-header {
       border-bottom: 1px solid #ddd;
-      padding-bottom: 15px;
-      margin-bottom: 20px;
-      font-size: 13px;
+      padding-bottom: 4px;
+      margin-bottom: 6px;
+      font-size: 8px;
       color: #666;
     }
     .email-subject {
-      font-size: 18px;
+      font-size: 11px;
       font-weight: 600;
       color: #333;
-      margin: 10px 0;
+      margin: 4px 0;
     }
     .receipt-badge {
       background: #f0f9ff;
       border: 1px solid #0ea5e9;
-      border-radius: 6px;
-      padding: 8px 12px;
-      margin: 10px 0;
-      font-size: 12px;
+      border-radius: 3px;
+      padding: 3px 6px;
+      margin: 4px 0;
+      font-size: 8px;
       color: #0369a1;
       display: inline-block;
     }
     .email-content {
-      font-size: 14px;
-      line-height: 1.6;
+      font-size: 9px;
+      line-height: 1.1;
     }
     .email-content table {
       width: 100%;
       border-collapse: collapse;
     }
     .email-content td {
-      padding: 8px;
+      padding: 2px;
       vertical-align: top;
+      font-size: 8px;
+    }
+    .email-content th {
+      padding: 2px;
+      font-size: 8px;
     }
     .email-content img {
       max-width: 100%;
       height: auto;
     }
-    /* Gmail-specific styles */
-    .gmail_default {
-      font-family: arial, sans-serif;
+    .email-content h1, .email-content h2, .email-content h3 {
+      font-size: 10px;
+      margin: 3px 0;
+      line-height: 1.1;
     }
-    /* Outlook-specific styles */
-    .outlook_default {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    .email-content p {
+      margin: 2px 0;
+      font-size: 9px;
     }
-    /* Clean up common email artifacts */
+    .email-content div {
+      font-size: 9px;
+    }
+    /* Force small text everywhere */
     .email-content * {
       max-width: 100% !important;
+      font-size: 9px !important;
+      line-height: 1.1 !important;
+      margin: 1px 0 !important;
+      padding: 1px !important;
     }
   </style>
 </head>
@@ -2366,7 +2380,7 @@ app.post('/convert-email-to-pdf', async (req, res) => {
                     body: JSON.stringify({
                         source: pdfHtmlContent,
                         format: 'A4',
-                        margin: '0.5in'
+                        margin: '0.2in'
                     })
                 });
 
