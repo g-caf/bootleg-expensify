@@ -1069,6 +1069,17 @@ class ExpenseGadget {
                     credentials: 'include'
                 });
 
+                if (response.status === 404) {
+                    // Scan ID not found - likely expired or invalid
+                    console.log('Scan ID not found, stopping polling');
+                    gmailScanBtn.disabled = false;
+                    const sliderContainer = document.getElementById('dateRangeContainer');
+                    const sliderVisible = sliderContainer && sliderContainer.style.display !== 'none';
+                    gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
+                    this.showScanResults(`Scan session expired. Please try again.`);
+                    return;
+                }
+                
                 if (!response.ok) {
                     throw new Error(`Status check failed: ${response.status}`);
                 }
@@ -1115,7 +1126,8 @@ class ExpenseGadget {
             } catch (error) {
                 console.error('Polling error:', error);
                 gmailScanBtn.disabled = false;
-                const sliderVisible = document.getElementById('scan-slider-container').style.display !== 'none';
+                const sliderContainer = document.getElementById('dateRangeContainer');
+                const sliderVisible = sliderContainer && sliderContainer.style.display !== 'none';
                 gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
                 this.showScanResults(`❌ Error checking scan progress: ${error.message}`);
             }

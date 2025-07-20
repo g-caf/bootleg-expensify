@@ -1031,6 +1031,19 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
         // Return immediate response and process in background
         const scanId = `scan_${Date.now()}_${Math.random().toString(36).substring(2)}`;
         
+        // Store initial scan status immediately
+        if (!global.scanResults) global.scanResults = new Map();
+        global.scanResults.set(scanId, {
+            completed: false,
+            status: 'processing',
+            receiptsFound: searchResponse.data.messages.length,
+            emailsToProcess: emailsToProcess,
+            dayRangeFrom: fromDays,
+            dayRangeTo: toDays,
+            daySpan: daySpan,
+            startedAt: new Date()
+        });
+        
         // Send immediate response
         res.json({
             success: true,
