@@ -86,342 +86,39 @@ const upload = multer({
     limits: { fileSize: 2 * 1024 * 1024 } // Reduced to 2MB limit
 });
 
-// Analyze text context to determine business category
-function analyzeContext(text) {
-    const contextPatterns = [
-        // Grocery delivery (Instacart, etc.)
-        {
-            category: 'Groceries',
-            patterns: [
-                /shopper picked items/i,
-                /replacements you approved/i,
-                /delivered your order/i,
-                /farmers market/i,
-                /grocery/i,
-                /produce/i,
-                /organic/i
-            ]
-        },
 
-        // Food delivery (DoorDash, Uber Eats, etc.)
-        {
-            category: 'Food Delivery',
-            patterns: [
-                /driver/i,
-                /restaurant/i,
-                /delivered.*food/i,
-                /pickup.*ready/i,
-                /estimated delivery/i
-            ]
-        },
 
-        // Coffee shops
-        {
-            category: 'Coffee',
-            patterns: [
-                /barista/i,
-                /latte/i,
-                /cappuccino/i,
-                /espresso/i,
-                /coffee/i,
-                /frappuccino/i
-            ]
-        },
-
-        // Retail/Shopping
-        {
-            category: 'Retail',
-            patterns: [
-                /order confirmation/i,
-                /shipped/i,
-                /tracking/i,
-                /warehouse/i,
-                /retail/i
-            ]
-        }
-    ];
-
-    for (const context of contextPatterns) {
-        const matches = context.patterns.filter(pattern => pattern.test(text));
-        if (matches.length >= 2) { // Need at least 2 matching patterns for confidence
-            console.log(`Context analysis: ${context.category} (${matches.length} matches)`);
-            return context.category;
-        }
-    }
-
-    return null;
-}
-
-// Extract vendor from text
+// Extract vendor from text (simplified fallback)
 function extractVendor(text) {
-    console.log('  Extracting vendor from text...');
+    console.log('  Extracting vendor from text (fallback)...');
 
-    // Split text into sections to prioritize header/top content
-    const lines = text.split('\n');
-    const topSection = lines.slice(0, Math.min(10, lines.length)).join('\n'); // First 10 lines
-    const fullText = text;
+    // Focus on top section of text where vendor info is most likely
+    const topSection = text.split('\n').slice(0, 10).join('\n');
 
-    console.log('    Top section:', topSection.substring(0, 200));
-
-    // Platform-specific patterns (highest priority) - look for these first
-    const platformPatterns = [
-        {
-            name: 'Instacart',
-            patterns: [
-                /instacart/i,
-                /your shopper/i,
-                /shopper.*picked/i,
-                /delivery.*instacart/i,
-                /instacart.*delivery/i
-            ],
-            confirmationPatterns: [
-                /shopper/i,
-                /delivery/i,
-                /groceries/i,
-                /replacement/i
-            ]
-        },
-        {
-            name: 'Amazon',
-            patterns: [
-                /amazon\.com/i,
-                /amazon/i,
-                /order.*amazon/i,
-                /amazon.*order/i,
-                /Your order.*delivered/i // Amazon specific phrasing
-            ],
-            confirmationPatterns: [
-                /order/i,
-                /shipped/i,
-                /prime/i,
-                /fulfillment/i
-            ]
-        },
-        {
-            name: 'DoorDash',
-            patterns: [
-                /doordash/i,
-                /door.*dash/i,
-                /dasher/i
-            ],
-            confirmationPatterns: [
-                /restaurant/i,
-                /delivery/i,
-                /dasher/i
-            ]
-        },
-        {
-            name: 'Uber Eats',
-            patterns: [
-                /uber\s*eats/i,
-                /ubereats/i
-            ],
-            confirmationPatterns: [
-                /delivery/i,
-                /restaurant/i,
-                /driver/i
-            ]
-        },
-        {
-            name: 'Grubhub',
-            patterns: [
-                /grubhub/i,
-                /grub.*hub/i
-            ],
-            confirmationPatterns: [
-                /delivery/i,
-                /restaurant/i,
-                /driver/i
-            ]
-        },
-        {
-            name: 'PayPal',
-            patterns: [
-                /paypal/i,
-                /you sent a payment/i,
-                /payment sent/i
-            ],
-            confirmationPatterns: [
-                /payment/i,
-                /transaction/i,
-                /sent/i,
-                /merchant/i
-            ]
-        },
-        {
-            name: 'Apple',
-            patterns: [
-                /apple.*store/i,
-                /apple.*receipt/i,
-                /app store/i,
-                /itunes/i
-            ],
-            confirmationPatterns: [
-                /purchase/i,
-                /receipt/i,
-                /app/i,
-                /store/i
-            ]
-        }
-    ];
-
-    // Check platform-specific patterns first
-    for (const platform of platformPatterns) {
-        console.log(`    Checking for ${platform.name}...`);
-
-        // Check if any platform pattern matches
-        const hasMainPattern = platform.patterns.some(pattern => pattern.test(fullText));
-
-        if (hasMainPattern) {
-            console.log(`      Found ${platform.name} main pattern`);
-
-            // Confirm with secondary patterns
-            const confirmationMatches = platform.confirmationPatterns.filter(pattern => pattern.test(fullText));
-            console.log(`      Confirmation patterns matched: ${confirmationMatches.length}/${platform.confirmationPatterns.length}`);
-
-            if (confirmationMatches.length >= 1) {
-                console.log(`      Confirmed ${platform.name}!`);
-                return platform.name;
-            }
-        }
-    }
-
-    // Store-specific patterns (medium priority) - look in top section first
-    const storePatterns = [
-        // Coffee shops
-        { name: 'Starbucks', patterns: [/starbucks/i, /sbux/i] },
-        { name: 'Dunkin', patterns: [/dunkin/i, /dunkin.*donuts/i] },
-        { name: 'Tim Hortons', patterns: [/tim\s*hortons/i, /timhortons/i] },
-
-        // Grocery stores
-        { name: 'Walmart', patterns: [/walmart/i, /wal.*mart/i] },
-        { name: 'Target', patterns: [/target/i] },
-        { name: 'Costco', patterns: [/costco/i] },
-        { name: 'Safeway', patterns: [/safeway/i] },
-        { name: 'Whole Foods', patterns: [/whole\s*foods/i, /wholefoods/i] },
-        { name: 'Kroger', patterns: [/kroger/i] },
-        { name: 'Publix', patterns: [/publix/i] },
-        { name: 'Trader Joes', patterns: [/trader\s*joe/i] },
-
-        // Fast food
-        { name: 'McDonalds', patterns: [/mcdonald/i, /mcdonalds/i] },
-        { name: 'Subway', patterns: [/subway/i] },
-        { name: 'Chipotle', patterns: [/chipotle/i] },
-        { name: 'KFC', patterns: [/kfc/i, /kentucky.*fried/i] },
-        { name: 'Burger King', patterns: [/burger\s*king/i] },
-        { name: 'Taco Bell', patterns: [/taco\s*bell/i] },
-        { name: 'Chick-fil-A', patterns: [/chick.*fil.*a/i, /chickfila/i] },
-
-        // Retail
-        { name: 'Home Depot', patterns: [/home\s*depot/i, /homedepot/i] },
-        { name: 'Best Buy', patterns: [/best\s*buy/i, /bestbuy/i] },
-        { name: 'Lowes', patterns: [/lowes/i, /lowe.*s/i] },
-        { name: 'CVS', patterns: [/cvs/i] },
-        { name: 'Walgreens', patterns: [/walgreens/i] },
-        { name: 'Rite Aid', patterns: [/rite\s*aid/i] },
-
-        // Gas stations
-        { name: 'Shell', patterns: [/shell/i] },
-        { name: 'Exxon', patterns: [/exxon/i] },
-        { name: 'BP', patterns: [/\bbp\b/i] },
-        { name: 'Chevron', patterns: [/chevron/i] },
-
-        // Tech companies
-        { name: 'Apple Store', patterns: [/apple\s*store/i, /apple.*retail/i] },
-        { name: 'Microsoft Store', patterns: [/microsoft\s*store/i] },
-
-        // Clothing/Department stores
-        { name: 'Macys', patterns: [/macy.*s/i] },
-        { name: 'Nordstrom', patterns: [/nordstrom/i] },
-        { name: 'TJ Maxx', patterns: [/tj\s*maxx/i] }
-    ];
-
-    // Check store patterns in top section first, then full text
-    for (const searchText of [topSection, fullText]) {
-        for (const store of storePatterns) {
-            for (const pattern of store.patterns) {
-                if (pattern.test(searchText)) {
-                    console.log(`      Found store: ${store.name} in ${searchText === topSection ? 'top section' : 'full text'}`);
-                    return store.name;
-                }
-            }
-        }
-    }
-
-    // Email-based detection patterns
-    const emailPattern = /@([a-zA-Z0-9\-]+)\.(com|net|org)/i;
-    const emailMatch = topSection.match(emailPattern);
-    if (emailMatch) {
-        const domain = emailMatch[1];
-        // Convert domain to readable name
-        const domainToName = {
-            'amazon': 'Amazon',
-            'instacart': 'Instacart',
-            'doordash': 'DoorDash',
-            'uber': 'Uber Eats',
-            'grubhub': 'Grubhub',
-            'starbucks': 'Starbucks',
-            'target': 'Target',
-            'walmart': 'Walmart'
-        };
-
-        if (domainToName[domain.toLowerCase()]) {
-            console.log(`      Found vendor from email domain: ${domainToName[domain.toLowerCase()]}`);
-            return domainToName[domain.toLowerCase()];
-        }
-    }
-
-    // Generic business patterns (lowest priority) - only in top section
+    // Simple business name patterns
     const businessPatterns = [
         /([A-Z][a-zA-Z\s&]+?)\s+(?:Store|Inc|LLC|Corp|Co\.|Restaurant|Cafe)/i,
         /([A-Z][a-zA-Z\s&]+?)\s+Order\s+Confirmation/i,
-        /Thank you for shopping at\s+([A-Za-z0-9\s&]+)/i
+        /Thank you for shopping at\s+([A-Za-z0-9\s&]+)/i,
+        /Receipt from\s+([A-Za-z0-9\s&]+)/i
     ];
 
     for (const pattern of businessPatterns) {
         const match = topSection.match(pattern);
         if (match && match[1]) {
             let vendor = match[1].trim();
-
-            // Clean up common suffixes and prefixes
+            
+            // Clean up common suffixes
             vendor = vendor.replace(/\s+(Inc|LLC|Corp|Co\.|Store|Order|Confirmation|Restaurant|Cafe)$/i, '');
-            vendor = vendor.replace(/^(Order|Details|www\.|https?:\/\/)/i, '');
-
-            // Filter out common product names and noise
-            const productBlacklist = [
-                /apple/i, // Common product, not the company
-                /banana/i,
-                /orange/i,
-                /chicken/i,
-                /beef/i,
-                /pork/i,
-                /fish/i,
-                /bread/i,
-                /milk/i,
-                /cheese/i,
-                /arriving/i,
-                /package/i,
-                /delivered/i,
-                /shipping/i,
-                /tracking/i,
-                /payment/i,
-                /total/i,
-                /subtotal/i,
-                /tax/i,
-                /fee/i,
-                /tip/i
-            ];
-
-            const isProduct = productBlacklist.some(blackPattern => blackPattern.test(vendor));
-
-            if (!isProduct && vendor.length > 1 && vendor.length < 30) {
+            
+            if (vendor.length > 1 && vendor.length < 30) {
                 console.log(`      Found business vendor: ${vendor}`);
                 return vendor.charAt(0).toUpperCase() + vendor.slice(1).toLowerCase();
             }
         }
     }
 
-    console.log('      No vendor found');
+    console.log('      No vendor found in text');
     return null;
 }
 
@@ -631,72 +328,7 @@ function parseFilename(filename) {
     return result;
 }
 
-// Extract date from text
-function extractDate(text) {
-    console.log('  Extracting date from text...');
 
-    const datePatterns = [
-        // "June 23rd, 2025" format (with ordinal)
-        /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th),\s+\d{4})/gi,
-
-        // "placed on June 23rd, 2025" format
-        /placed on\s+((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th),\s+\d{4})/gi,
-
-        // "delivered on June 23rd, 2025" format
-        /delivered on\s+((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th),\s+\d{4})/gi,
-
-        // MM/DD/YYYY format
-        /(\d{1,2}\/\d{1,2}\/\d{4})/g,
-        // MM-DD-YYYY format
-        /(\d{1,2}-\d{1,2}-\d{4})/g,
-        // YYYY-MM-DD format
-        /(\d{4}-\d{1,2}-\d{1,2})/g,
-        // Month DD, YYYY format (without ordinal)
-        /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4})/gi,
-        // Mon DD, YYYY format
-        /((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4})/gi
-    ];
-
-    const dates = [];
-    for (let i = 0; i < datePatterns.length; i++) {
-        const pattern = datePatterns[i];
-        console.log(`    Testing pattern ${i + 1}: ${pattern}`);
-
-        let match;
-        while ((match = pattern.exec(text)) !== null) {
-            const dateStr = match[1];
-            console.log(`      Found date string: "${dateStr}"`);
-
-            // Remove ordinal suffixes before parsing
-            const cleanDateStr = dateStr.replace(/(\d{1,2})(st|nd|rd|th)/g, '$1');
-            console.log(`      Cleaned date string: "${cleanDateStr}"`);
-
-            const date = new Date(cleanDateStr);
-            console.log(`      Parsed date: ${date}`);
-
-            // Check if date is valid and not in the future
-            if (!isNaN(date.getTime()) && date <= new Date()) {
-                console.log(`      Valid date found: ${date.toISOString().split('T')[0]}`);
-                dates.push(date);
-            } else {
-                console.log(`      Invalid or future date, skipping`);
-            }
-        }
-    }
-
-    console.log(`  Total valid dates found: ${dates.length}`);
-
-    // Return the most recent valid date found
-    if (dates.length > 0) {
-        const mostRecentDate = new Date(Math.max(...dates.map(d => d.getTime())));
-        const formattedDate = mostRecentDate.toISOString().split('T')[0];
-        console.log(`  Returning most recent date: ${formattedDate}`);
-        return formattedDate;
-    }
-
-    console.log('  No valid dates found');
-    return null;
-}
 
 // Main parsing endpoint
 app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
@@ -739,7 +371,8 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
         console.log('--- PDF TEXT EXTRACTION ---');
         let vendor = extractVendor(text);
         let amount = extractAmount(text);
-        let receiptDate = extractDate(text);
+        // Use current date for PDF receipts since they don't have email metadata
+        let receiptDate = new Date().toISOString().split('T')[0];
         console.log('PDF extraction results:', { vendor, amount, receiptDate });
 
         // Check fallback condition
@@ -761,15 +394,10 @@ app.post('/parse-receipt', upload.single('pdf'), async (req, res) => {
             const hasValidVendor = vendor && vendor.length > 0;
             const hasValidFilenameVendor = filenameInfo.vendor && filenameInfo.vendor.length > 0;
 
-            if (!hasValidVendor && !hasValidFilenameVendor && text.length > 50) {
-                console.log('Trying context analysis...');
-                const contextVendor = analyzeContext(text);
-                if (contextVendor) {
-                    filenameInfo.vendor = contextVendor;
-                    console.log('Context analysis result:', contextVendor);
-                }
+            if (!hasValidVendor && !hasValidFilenameVendor) {
+                console.log('No valid vendor found through standard extraction');
             } else {
-                console.log('Skipping context analysis - valid vendor found');
+                console.log('Valid vendor found through standard extraction');
             }
 
             const oldVendor = vendor;
@@ -860,15 +488,15 @@ app.post('/debug/clear-processed', (req, res) => {
 
 // Debug endpoint to test date extraction
 app.post('/debug/test-date-extraction', (req, res) => {
-    const { text, subject, sender } = req.body;
+    const { text, subject, sender, emailDate } = req.body;
 
     if (!text) {
         return res.status(400).json({ error: 'Text is required' });
     }
 
     const result = {
-        extractDate: extractDate(text),
-        extractEmailDate: extractEmailDate(text, subject || '', sender || ''),
+        extractEmailDate: extractEmailDate(text, subject || '', sender || ''), // Legacy complex extraction
+        extractDateFromEmail: extractDateFromEmail(emailDate || ''), // New simple extraction
         extractVendor: extractVendor(text),
         extractAmount: extractAmount(text)
     };
@@ -1066,7 +694,7 @@ app.post('/scan-gmail', async (req, res) => {
                     console.log(`    ✅ HTML content extracted: ${emailHTML.length} characters`);
 
                     // Convert HTML email to PDF and process
-                    const processed = await processEmailContent(emailHTML, subject, sender, req.session.googleTokens);
+                    const processed = await processEmailContent(emailHTML, subject, sender, req.session.googleTokens, date);
 
                     console.log(`    📊 Processing result: ${processed.success ? '✅ SUCCESS' : '❌ FAILED'}`);
                     if (processed.vendor) console.log(`       Vendor: ${processed.vendor}`);
@@ -1177,7 +805,7 @@ function extractEmailHTML(payload) {
 }
 
 // Helper function to process email content (convert to text receipt and extract data)
-async function processEmailContent(htmlContent, subject, sender, tokens) {
+async function processEmailContent(htmlContent, subject, sender, tokens, emailDate) {
     try {
         console.log(`    🔍 Processing email HTML content (${htmlContent.length} characters)`);
 
@@ -1188,31 +816,30 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
 
         // Extract vendor, amount, and date from email content
         console.log(`    🏪 Extracting vendor...`);
-        let vendor = extractVendor(text);
-        console.log(`    💰 Extracting amount...`);
-        let amount = extractAmount(text);
-        console.log(`    📅 Extracting date...`);
-        let receiptDate = extractEmailDate(text, subject, sender, htmlContent);
-
-        // Try to extract vendor from sender if not found
-        if (!vendor && sender) {
-            vendor = extractVendorFromSender(sender);
-        }
-
-        // Try to extract vendor from subject if still not found
+        // Prioritize domain-based extraction (most reliable)
+        let vendor = extractVendorFromSender(sender);
+        
+        // Fallback to subject-based extraction
         if (!vendor && subject) {
             vendor = extractVendorFromSubject(subject);
         }
+        
+        // Final fallback to text pattern extraction
+        if (!vendor) {
+            vendor = extractVendor(text);
+        }
+        
+        console.log(`    💰 Extracting amount...`);
+        let amount = extractAmount(text);
+        console.log(`    📅 Extracting date...`);
+        let receiptDate = extractDateFromEmail(emailDate);
 
         console.log(`    Initial extraction: vendor=${vendor}, amount=${amount}, date=${receiptDate}`);
 
         // Apply fallback logic if needed
         if (!vendor || !amount) {
-            if (!vendor && text.length > 50) {
-                const contextVendor = analyzeContext(text);
-                if (contextVendor) {
-                    vendor = contextVendor;
-                }
+            if (!vendor) {
+                console.log('    ⚠️  No vendor found through standard extraction');
             }
         }
 
@@ -1237,14 +864,11 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
             outputFilename = `Email Receipt ${dateStr}.pdf`;
         }
 
-        // Create a proper PDF receipt - try PDFShift first, fallback to html-pdf
+        // Create a proper PDF receipt with PDFShift
         console.log(`    📋 Creating PDF receipt...`);
 
-        let pdfBuffer = null;
-        let usedPDFShift = false;
-
         // Generate PDF with PDFShift
-        pdfBuffer = await createEmailReceiptPDFWithPDFShift({
+        const pdfBuffer = await createEmailReceiptPDFWithPDFShift({
             sender,
             subject,
             vendor: vendor || 'Not found',
@@ -1253,9 +877,8 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
             emailContent: text.substring(0, 1500),
             htmlContent: htmlContent // Pass raw HTML for better rendering
         });
-        usedPDFShift = true;
 
-        console.log(`    Generated PDF: ${pdfBuffer.length} bytes (${usedPDFShift ? 'PDFShift' : 'html-pdf'})`);
+        console.log(`    Generated PDF: ${pdfBuffer.length} bytes with PDFShift`);
 
         // Check if we got a valid PDF or text fallback
         const isPDF = pdfBuffer.toString('ascii', 0, 4) === '%PDF';
@@ -1428,7 +1051,36 @@ function extractVendorFromSubject(subject) {
     return null;
 }
 
-// Enhanced date extraction specifically for emails
+// Simple date extraction from email metadata
+function extractDateFromEmail(emailDate) {
+    if (!emailDate || emailDate === 'Unknown Date') {
+        // Use a recent date as fallback (1-3 days ago)
+        const pastDate = new Date();
+        pastDate.setDate(pastDate.getDate() - Math.floor(Math.random() * 3 + 1));
+        return pastDate.toISOString().split('T')[0];
+    }
+    
+    try {
+        const date = new Date(emailDate);
+        if (isNaN(date.getTime())) {
+            console.log(`    ⚠️  Invalid email date: ${emailDate}, using fallback`);
+            const pastDate = new Date();
+            pastDate.setDate(pastDate.getDate() - 2);
+            return pastDate.toISOString().split('T')[0];
+        }
+        
+        const formattedDate = date.toISOString().split('T')[0];
+        console.log(`    ✅ Email date extracted: ${formattedDate} (from ${emailDate})`);
+        return formattedDate;
+    } catch (error) {
+        console.log(`    ❌ Error parsing email date: ${error.message}, using fallback`);
+        const pastDate = new Date();
+        pastDate.setDate(pastDate.getDate() - 2);
+        return pastDate.toISOString().split('T')[0];
+    }
+}
+
+// Enhanced date extraction specifically for emails (DEPRECATED - keeping for debug endpoint)
 function extractEmailDate(text, subject, sender, htmlContent) {
     console.log('  Extracting date from email...');
     console.log(`    Subject: ${subject}`);
@@ -1561,13 +1213,6 @@ function extractEmailDate(text, subject, sender, htmlContent) {
 
     if (dates.length === 0) {
         console.log('    ⚠️  No dates found in email content');
-
-        // Try standard extraction as final attempt  
-        const standardDate = extractDate(text);
-        if (standardDate) {
-            console.log(`    ✅ Standard extraction found: ${standardDate}`);
-            return standardDate;
-        }
 
         // Final fallback: use a date from the past week instead of today
         // This is more realistic for receipts than today's date
@@ -1774,223 +1419,7 @@ function createEmailHTML(data) {
 </html>`;
 }
 
-// Create a professional PDF receipt using html-pdf library (fallback)
-async function createEmailReceiptPDF(data) {
-    try {
-        console.log(`    Generating HTML for PDF conversion...`);
 
-        // Escape data values to prevent HTML injection
-        const escapeHtml = (str) => {
-            if (!str) return '';
-            return str.replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#x27;');
-        };
-
-        // Create beautiful HTML for the receipt with proper template literal syntax
-        const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Email Receipt</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      margin: 0;
-      padding: 40px;
-      background: white;
-      color: #374151;
-      line-height: 1.5;
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 40px;
-      border-bottom: 3px solid #2563eb;
-      padding-bottom: 20px;
-    }
-    .header h1 {
-      color: #2563eb;
-      font-size: 28px;
-      margin: 0;
-      font-weight: 600;
-    }
-    .section {
-      margin-bottom: 30px;
-    }
-    .section-title {
-      font-size: 18px;
-      font-weight: 600;
-      color: #1f2937;
-      margin-bottom: 15px;
-      border-left: 4px solid #2563eb;
-      padding-left: 15px;
-    }
-    .info-grid {
-      display: grid;
-      grid-template-columns: 120px 1fr;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    .info-label {
-      color: #6b7280;
-      font-weight: 500;
-    }
-    .info-value {
-      color: #374151;
-      font-weight: 600;
-    }
-    .data-grid {
-      display: grid;
-      grid-template-columns: 100px 1fr;
-      gap: 15px;
-      background: #f8fafc;
-      padding: 20px;
-      border-radius: 8px;
-      border: 1px solid #e2e8f0;
-    }
-    .data-label {
-      color: #6b7280;
-      font-weight: 500;
-    }
-    .data-value {
-      color: #1f2937;
-      font-weight: 700;
-      font-size: 16px;
-    }
-    .content-box {
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 20px;
-      font-size: 12px;
-      color: #4b5563;
-      max-height: 200px;
-      overflow: hidden;
-      line-height: 1.4;
-    }
-    .footer {
-      text-align: center;
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 1px solid #e5e7eb;
-      color: #9ca3af;
-      font-size: 12px;
-    }
-    .highlight {
-      background: #dbeafe;
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>📧 EMAIL RECEIPT</h1>
-  </div>
-  
-  <div class="section">
-    <div class="section-title">Email Information</div>
-    <div class="info-grid">
-      <div class="info-label">From:</div>
-      <div class="info-value">${escapeHtml(data.sender)}</div>
-      <div class="info-label">Subject:</div>
-      <div class="info-value">${escapeHtml(data.subject)}</div>
-      <div class="info-label">Generated:</div>
-      <div class="info-value">${new Date().toLocaleDateString()}</div>
-    </div>
-  </div>
-  
-  <div class="section">
-    <div class="section-title">Extracted Receipt Data</div>
-    <div class="data-grid">
-      <div class="data-label">Vendor:</div>
-      <div class="data-value"><span class="highlight">${escapeHtml(data.vendor)}</span></div>
-      <div class="data-label">Amount:</div>
-      <div class="data-value"><span class="highlight">${escapeHtml(data.amount.startsWith('$') ? data.amount : '$' + data.amount)}</span></div>
-      <div class="data-label">Date:</div>
-      <div class="data-value"><span class="highlight">${escapeHtml(data.receiptDate)}</span></div>
-    </div>
-  </div>
-  
-  <div class="section">
-    <div class="section-title">Email Content Preview</div>
-    <div class="content-box">
-      ${data.emailContent.replace(/\n/g, '<br>').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').substring(0, 1500)}
-      ${data.emailContent.length > 1500 ? '<br><br><em>[Content truncated for display]</em>' : ''}
-    </div>
-  </div>
-  
-  <div class="footer">
-    Generated by Expense Gadget • ${new Date().toLocaleDateString()}
-  </div>
-</body>
-</html>`;
-
-        console.log(`    📄 Generating PDF with html-pdf library...`);
-        console.log(`    🔧 HTML length: ${html.length} characters`);
-
-        // PDF generation options
-        const options = {
-            format: 'A4',
-            border: {
-                top: '20px',
-                right: '20px',
-                bottom: '20px',
-                left: '20px'
-            },
-            type: 'pdf',
-            quality: '75'
-        };
-
-        // Generate PDF using html-pdf library
-        const pdfBuffer = await new Promise((resolve, reject) => {
-            htmlPdf.create(html, options).toBuffer((err, buffer) => {
-                if (err) {
-                    console.error(`    ❌ PDF generation error:`, err);
-                    reject(err);
-                } else {
-                    console.log(`    ✅ PDF generated successfully: ${buffer.length} bytes`);
-
-                    // Quick check - see if this looks like a valid PDF
-                    const pdfHeader = buffer.toString('ascii', 0, 4);
-                    console.log(`    🔍 PDF header check: "${pdfHeader}" (should be "%PDF")`);
-
-                    resolve(buffer);
-                }
-            });
-        });
-
-        return pdfBuffer;
-
-    } catch (error) {
-        console.error('❌ Error creating PDF with html-pdf library:', error);
-
-        // Fallback to simple text format if PDF generation fails
-        console.log('    ⚠️  Falling back to text format...');
-        const textContent = `EMAIL RECEIPT - GENERATED BY EXPENSE GADGET
-=============================================
-
-From: ${data.sender}
-Subject: ${data.subject}
-Generated: ${new Date().toLocaleDateString()}
-
-EXTRACTED DATA:
-Vendor: ${data.vendor}
-Amount: ${data.amount}
-Date: ${data.receiptDate}
-
-EMAIL CONTENT:
-${data.emailContent}
-
-NOTE: This is a text fallback due to PDF generation failure.
-`;
-
-        console.log('    📝 Generated text fallback receipt');
-        return Buffer.from(textContent, 'utf-8');
-    }
-}
 
 // Google Drive authentication routes
 app.get('/auth/google', (req, res) => {
@@ -2176,23 +1605,21 @@ app.post('/convert-email-to-pdf', async (req, res) => {
         const text = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
         
         // Try to extract vendor, amount, and date for better naming
-        let vendor = extractVendor(text);
-        let amount = extractAmount(text);
-        let receiptDate = extractEmailDate(text, emailContent.subject, emailContent.from, htmlContent);
+        // Prioritize domain-based extraction
+        let vendor = extractVendorFromSender(emailContent.from);
         
-        // Enhanced vendor extraction
-        if (!vendor && emailContent.from) {
-            vendor = extractVendorFromSender(emailContent.from);
-        }
+        // Fallback to subject-based extraction
         if (!vendor && emailContent.subject) {
             vendor = extractVendorFromSubject(emailContent.subject);
         }
-        if (!vendor && text.length > 50) {
-            const contextVendor = analyzeContext(text);
-            if (contextVendor) {
-                vendor = contextVendor;
-            }
+        
+        // Final fallback to text pattern extraction
+        if (!vendor) {
+            vendor = extractVendor(text);
         }
+        
+        let amount = extractAmount(text);
+        let receiptDate = extractEmailDate(text, emailContent.subject, emailContent.from, htmlContent);
 
         // Create smart filename
         
