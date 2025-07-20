@@ -152,25 +152,14 @@ function analyzeContext(text) {
     return null;
 }
 
-// Extract vendor from text (simplified - domain extraction is primary)
+// Extract vendor from text
 function extractVendor(text) {
-    // Simple fallback for common cases where domain extraction might miss
-    const commonVendors = [
-        { pattern: /amazon/i, name: 'Amazon' },
-        { pattern: /starbucks/i, name: 'Starbucks' },
-        { pattern: /target/i, name: 'Target' },
-        { pattern: /walmart/i, name: 'Walmart' },
-        { pattern: /costco/i, name: 'Costco' }
-    ];
+    console.log('  Extracting vendor from text...');
 
-    for (const vendor of commonVendors) {
-        if (vendor.pattern.test(text)) {
-            return vendor.name;
-        }
-    }
-
-    return null;
-}
+    // Split text into sections to prioritize header/top content
+    const lines = text.split('\n');
+    const topSection = lines.slice(0, Math.min(10, lines.length)).join('\n'); // First 10 lines
+    const fullText = text;
 
     console.log('    Top section:', topSection.substring(0, 200));
 
