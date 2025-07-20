@@ -928,11 +928,12 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
                 console.log(`\n=== EMAIL ${index + 1}/${emailsToProcess} ===`);
                 console.log(`Processing message ID: ${message.id}`);
 
-                // Check if we've already processed this email
-                if (processedEmailIds.has(message.id)) {
-                    console.log(`  ❌ SKIPPED: Already processed email: ${message.id}`);
-                    return null;
-                }
+                // Check if we've already processed this email (skip check for debugging)
+                // Temporarily disable to allow reprocessing
+                // if (processedEmailIds.has(message.id)) {
+                //     console.log(`  ❌ SKIPPED: Already processed email: ${message.id}`);
+                //     return null;
+                // }
 
                 // Get full message details (with caching)
                 let messageDetails;
