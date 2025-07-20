@@ -2274,6 +2274,16 @@ app.post('/convert-email-to-pdf', async (req, res) => {
     }
 });
 
+// Debug endpoint to check PDFShift configuration
+app.get('/debug-pdfshift', (req, res) => {
+    const apiKey = process.env.PDFSHIFT_API_KEY;
+    res.json({
+        hasApiKey: !!apiKey,
+        keyPrefix: apiKey ? apiKey.substring(0, 8) + '...' : 'No key',
+        keyLength: apiKey ? apiKey.length : 0
+    });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Receipt parser server running on port ${PORT}`);
 });
