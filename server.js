@@ -945,17 +945,16 @@ async function processEmailContent(htmlContent, subject, sender, tokens, emailDa
 
         // Extract vendor, amount, and date from email content
         console.log(`    🏪 Extracting vendor...`);
-        // Prioritize domain-based extraction (most reliable)
-        let vendor = extractVendorFromSender(sender);
+        let vendor = extractVendor(text);
         
-        // Fallback to subject-based extraction
+        // Try to extract vendor from sender if not found
+        if (!vendor && sender) {
+            vendor = extractVendorFromSender(sender);
+        }
+
+        // Try to extract vendor from subject if still not found
         if (!vendor && subject) {
             vendor = extractVendorFromSubject(subject);
-        }
-        
-        // Final fallback to text pattern extraction
-        if (!vendor) {
-            vendor = extractVendor(text);
         }
         
         console.log(`    💰 Extracting amount...`);
@@ -1077,6 +1076,13 @@ function extractVendorFromSender(sender) {
     if (!emailMatch) return null;
     
     const domain = emailMatch[1].toLowerCase();
+    
+    // Skip forwarding domains - let text extraction find the real vendor
+    const forwardingDomains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'];
+    if (forwardingDomains.includes(domain)) {
+        console.log(`    Skipping forwarding domain: ${domain}`);
+        return null;
+    }
 
     // Comprehensive domain-to-vendor mapping
     const domainMappings = {
@@ -1740,17 +1746,14 @@ app.post('/convert-email-to-pdf', strictLimiter, async (req, res) => {
         const text = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
         
         // Try to extract vendor, amount, and date for better naming
-        // Prioritize domain-based extraction
-        let vendor = extractVendorFromSender(emailContent.from);
+        let vendor = extractVendor(text);
         
-        // Fallback to subject-based extraction
+        // Enhanced vendor extraction
+        if (!vendor && emailContent.from) {
+            vendor = extractVendorFromSender(emailContent.from);
+        }
         if (!vendor && emailContent.subject) {
             vendor = extractVendorFromSubject(emailContent.subject);
-        }
-        
-        // Final fallback to text pattern extraction
-        if (!vendor) {
-            vendor = extractVendor(text);
         }
         
         let amount = extractAmount(text);
