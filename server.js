@@ -882,10 +882,14 @@ app.post('/debug/test-date-extraction', (req, res) => {
   res.json(result);
 });
 
-// Debug endpoint to test Browserless.io
+// Debug endpoint to test Browserless.io with detailed logging
 app.post('/debug/test-browserless', async (req, res) => {
   try {
     const token = process.env.BROWSERLESS_TOKEN;
+    console.log('=== BROWSERLESS DEBUG TEST ===');
+    console.log('Token available:', !!token);
+    console.log('Token starts with:', token ? token.substring(0, 8) + '...' : 'N/A');
+    
     if (!token || token === 'YOUR_BROWSERLESS_TOKEN') {
       return res.status(400).json({ error: 'BROWSERLESS_TOKEN not set' });
     }
@@ -893,8 +897,17 @@ app.post('/debug/test-browserless', async (req, res) => {
     const simpleHTML = `<!DOCTYPE html>
 <html>
 <head><title>Test</title></head>
-<body><h1>Test PDF Generation</h1><p>This is a test.</p></body>
+<body><h1>Test PDF Generation</h1><p>This is a test from ${new Date().toISOString()}.</p></body>
 </html>`;
+    
+    const requestBody = {
+      html: simpleHTML,
+      options: { format: 'A4' }
+    };
+    
+    console.log('Making request to Browserless.io...');
+    console.log('Request URL:', 'https://chrome.browserless.io/pdf');
+    console.log('Request body size:', JSON.stringify(requestBody).length);
     
     const response = await fetch('https://chrome.browserless.io/pdf', {
       method: 'POST',
@@ -902,32 +915,39 @@ app.post('/debug/test-browserless', async (req, res) => {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({
-        html: simpleHTML,
-        options: { format: 'A4' }
-      })
+      body: JSON.stringify(requestBody)
     });
+    
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
     
     if (!response.ok) {
       const errorText = await response.text();
+      console.log('Error response body:', errorText);
       return res.status(500).json({ 
         error: `Browserless API error: ${response.status}`,
-        details: errorText
+        details: errorText,
+        headers: Object.fromEntries(response.headers.entries())
       });
     }
     
     const pdfBuffer = await response.buffer();
     const pdfHeader = pdfBuffer.toString('ascii', 0, 4);
     
+    console.log('Success! PDF generated, size:', pdfBuffer.length);
+    console.log('PDF header:', pdfHeader);
+    
     res.json({
       success: true,
       pdfSize: pdfBuffer.length,
       pdfHeader: pdfHeader,
-      isValidPDF: pdfHeader === '%PDF'
+      isValidPDF: pdfHeader === '%PDF',
+      responseHeaders: Object.fromEntries(response.headers.entries())
     });
     
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Browserless test error:', error);
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
