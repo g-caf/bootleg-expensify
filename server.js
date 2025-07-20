@@ -1228,16 +1228,16 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
             outputFilename = `Email Receipt ${dateStr}.pdf`;
         }
 
-        // Create a proper PDF receipt - try Browserless.io first, fallback to html-pdf
+        // Create a proper PDF receipt - try PDFShift first, fallback to html-pdf
         console.log(`    📋 Creating PDF receipt...`);
 
         let pdfBuffer = null;
-        let usedBrowserless = false;
+        let usedPDFShift = false;
 
         try {
-            // Try Browserless.io first for best results
-            console.log(`    🌐 Attempting Browserless.io PDF generation...`);
-            pdfBuffer = await createEmailReceiptPDFWithBrowserless({
+            // Try PDFShift first for best results
+            console.log(`    📄 Attempting PDFShift PDF generation...`);
+            pdfBuffer = await createEmailReceiptPDFWithPDFShift({
                 sender,
                 subject,
                 vendor: vendor || 'Not found',
@@ -1246,10 +1246,10 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
                 emailContent: text.substring(0, 1500),
                 htmlContent: htmlContent // Pass raw HTML for better rendering
             });
-            usedBrowserless = true;
-            console.log(`    ✅ Browserless.io PDF generation successful!`);
-        } catch (browserlessError) {
-            console.log(`    ⚠️  Browserless.io failed, falling back to html-pdf: ${browserlessError.message}`);
+            usedPDFShift = true;
+            console.log(`    ✅ PDFShift PDF generation successful!`);
+        } catch (pdfshiftError) {
+            console.log(`    ⚠️  PDFShift failed, falling back to html-pdf: ${pdfshiftError.message}`);
 
             // Fallback to html-pdf
             pdfBuffer = await createEmailReceiptPDF({
@@ -1263,7 +1263,7 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
             console.log(`    📄 html-pdf fallback used`);
         }
 
-        console.log(`    Generated PDF: ${pdfBuffer.length} bytes (${usedBrowserless ? 'Browserless.io' : 'html-pdf'})`);
+        console.log(`    Generated PDF: ${pdfBuffer.length} bytes (${usedPDFShift ? 'PDFShift' : 'html-pdf'})`);
 
         // Check if we got a valid PDF or text fallback
         const isPDF = pdfBuffer.toString('ascii', 0, 4) === '%PDF';
@@ -1293,7 +1293,7 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
             emailContent: text, // Include full email text content
             htmlContent: htmlContent, // Include original HTML content
             pdfGenerated: isPDF,
-            error: isPDF ? null : 'PDF generation used text fallback - check Browserless.io configuration',
+            error: isPDF ? null : 'PDF generation used text fallback - check PDFShift configuration',
             googleDrive: driveUpload
         };
 
@@ -1553,15 +1553,15 @@ function parseEmailDate(dateStr) {
     return null;
 }
 
-// Browserless.io PDF generation
-async function createEmailReceiptPDFWithBrowserless(data) {
+// PDFShift PDF generation
+async function createEmailReceiptPDFWithPDFShift(data) {
     try {
-        console.log(`    🌐 Starting Browserless.io PDF generation...`);
+        console.log(`    📄 Starting PDFShift PDF generation...`);
         
         // Check if API key is configured
-        const apiKey = process.env.BROWSERLESS_API_KEY;
-        if (!apiKey || apiKey === 'YOUR_BROWSERLESS_KEY') {
-            throw new Error('BROWSERLESS_API_KEY not configured');
+        const apiKey = process.env.PDFSHIFT_API_KEY;
+        if (!apiKey || apiKey === 'YOUR_PDFSHIFT_KEY') {
+            throw new Error('PDFSHIFT_API_KEY not configured');
         }
         console.log(`    🔑 API key configured: ${apiKey.substring(0, 8)}...`);
 
@@ -1569,39 +1569,31 @@ async function createEmailReceiptPDFWithBrowserless(data) {
         const emailHtml = createEmailHTML(data);
         console.log(`    📄 Generated HTML: ${emailHtml.length} characters`);
 
-        console.log(`    📝 Sending request to Browserless.io...`);
+        console.log(`    📝 Sending request to PDFShift...`);
 
-        const browserlessResponse = await fetch('https://chrome.browserless.io/pdf', {
+        const pdfshiftResponse = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
+                'Authorization': `Basic ${Buffer.from('api:' + apiKey).toString('base64')}`
             },
             body: JSON.stringify({
-                html: emailHtml,
-                options: {
-                    format: 'A4',
-                    printBackground: true,
-                    margin: {
-                        top: '20px',
-                        bottom: '20px',
-                        left: '20px',
-                        right: '20px'
-                    }
-                }
+                source: emailHtml,
+                format: 'A4',
+                margin: '0.5in'
             })
         });
 
-        console.log(`    📡 Browserless.io response status: ${browserlessResponse.status}`);
+        console.log(`    📡 PDFShift response status: ${pdfshiftResponse.status}`);
         
-        if (!browserlessResponse.ok) {
-            const errorText = await browserlessResponse.text();
-            console.error('    ❌ Browserless.io API error:', browserlessResponse.status, errorText);
-            throw new Error(`Browserless.io API error: ${browserlessResponse.status} - ${errorText}`);
+        if (!pdfshiftResponse.ok) {
+            const errorText = await pdfshiftResponse.text();
+            console.error('    ❌ PDFShift API error:', pdfshiftResponse.status, errorText);
+            throw new Error(`PDFShift API error: ${pdfshiftResponse.status} - ${errorText}`);
         }
 
-        const pdfBuffer = Buffer.from(await browserlessResponse.arrayBuffer());
-        console.log(`    ✅ Browserless.io PDF generated successfully: ${pdfBuffer.length} bytes`);
+        const pdfBuffer = Buffer.from(await pdfshiftResponse.arrayBuffer());
+        console.log(`    ✅ PDFShift PDF generated successfully: ${pdfBuffer.length} bytes`);
         
         // Verify it's actually a PDF
         const pdfHeader = pdfBuffer.toString('ascii', 0, 4);
@@ -1610,7 +1602,7 @@ async function createEmailReceiptPDFWithBrowserless(data) {
         return pdfBuffer;
 
     } catch (error) {
-        console.error('    ❌ Browserless.io PDF generation failed:', error.message);
+        console.error('    ❌ PDFShift PDF generation failed:', error.message);
         throw error;
     }
 }
