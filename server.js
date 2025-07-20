@@ -883,7 +883,7 @@ app.post('/debug/test-date-extraction', (req, res) => {
 });
 
 // Debug endpoint to test Browserless.io with detailed logging
-app.post('/debug/test-browserless', async (req, res) => {
+app.get('/debug/test-browserless', async (req, res) => {
   try {
     const token = process.env.BROWSERLESS_TOKEN;
     console.log('=== BROWSERLESS DEBUG TEST ===');
