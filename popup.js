@@ -325,16 +325,38 @@ class ExpenseGadget {
 
         // Dual range slider with auto-scan
         let scanTimeout = null;
+        const snapToCommonValues = (value) => {
+            const snapPoints = [15, 30, 60];
+            const snapThreshold = 3; // Snap within 3 days of target
+
+            for (const snapPoint of snapPoints) {
+                if (Math.abs(value - snapPoint) <= snapThreshold) {
+                    return snapPoint;
+                }
+            }
+            return value;
+        };
+
         const updateRangeDisplay = () => {
-            const minVal = parseInt(dayRangeMin.value); // Days from today (0 = today)
-            const maxVal = parseInt(dayRangeMax.value); // Days ago (7 = 7 days ago)
+            let minVal = parseInt(dayRangeMin.value); // Days from today (0 = today)
+            let maxVal = parseInt(dayRangeMax.value); // Days ago (7 = 7 days ago)
+
+            // Apply snapping to common values
+            minVal = snapToCommonValues(minVal);
+            maxVal = snapToCommonValues(maxVal);
+
+            // Update the input values to reflect snapping
+            dayRangeMin.value = minVal;
+            dayRangeMax.value = maxVal;
 
             // Ensure min <= max (today or recent <= older days ago)
             if (minVal > maxVal) {
                 if (dayRangeMin === document.activeElement) {
                     dayRangeMax.value = minVal;
+                    maxVal = minVal;
                 } else {
                     dayRangeMin.value = maxVal;
+                    minVal = maxVal;
                 }
             }
 

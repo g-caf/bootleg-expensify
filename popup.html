@@ -456,6 +456,26 @@
             border-radius: 2px;
             transform: translateY(-50%);
         }
+
+        .tick-marks {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 0;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+
+        .tick-mark {
+            position: absolute;
+            width: 2px;
+            height: 12px;
+            background: #9ca3af;
+            top: -6px;
+            transform: translateX(-50%);
+            border-radius: 1px;
+        }
         
         .dual-range-input {
             position: absolute;
@@ -521,6 +541,15 @@
             font-size: 11px;
             color: #9ca3af;
             margin-top: 4px;
+            position: relative;
+        }
+
+        .tick-label {
+            position: absolute !important;
+            transform: translateX(-50%);
+            font-size: 9px;
+            color: #6b7280;
+            font-weight: 500;
         }
         
         /* Scan Results Area */
@@ -582,12 +611,21 @@
                 <div class="dual-range-container">
                     <div class="dual-range-track"></div>
                     <div class="dual-range-progress" id="rangeProgress"></div>
+                    <!-- Tick marks for common day values -->
+                    <div class="tick-marks">
+                        <div class="tick-mark" style="left: 16.67%;" title="15 days"></div> <!-- 15/90 = 16.67% -->
+                        <div class="tick-mark" style="left: 33.33%;" title="30 days"></div> <!-- 30/90 = 33.33% -->
+                        <div class="tick-mark" style="left: 66.67%;" title="60 days"></div> <!-- 60/90 = 66.67% -->
+                    </div>
                     <input type="range" id="dayRangeMin" min="0" max="90" value="0" class="dual-range-input">
                     <input type="range" id="dayRangeMax" min="0" max="90" value="7" class="dual-range-input">
                 </div>
                 
                 <div class="range-labels">
                     <span>Today</span>
+                    <span class="tick-label" style="left: 16.67%;">15d</span>
+                    <span class="tick-label" style="left: 33.33%;">30d</span>
+                    <span class="tick-label" style="left: 66.67%;">60d</span>
                     <span>90d ago</span>
                 </div>
             </div>
