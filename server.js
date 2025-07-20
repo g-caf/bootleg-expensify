@@ -89,8 +89,9 @@ app.use(session({
     saveUninitialized: false,
     cookie: { 
         secure: isProduction, // Use secure cookies in production
-        httpOnly: true, // Prevent XSS attacks
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        httpOnly: false, // Allow extension to access cookie (extensions are trusted environment)
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: 'none' // Required for cross-origin requests from extensions
     }
 }));
 
@@ -119,7 +120,13 @@ app.use(cors({
             callback(null, true);
         } else {
             console.warn(`❌ Blocked CORS request from: ${origin}`);
-            callback(new Error('Not allowed by CORS'));
+            // Temporarily allow all origins for debugging - REMOVE IN PRODUCTION
+            if (!isProduction) {
+                console.warn(`🔧 Debug mode: allowing blocked origin anyway`);
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
         }
     },
     credentials: true,
