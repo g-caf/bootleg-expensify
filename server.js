@@ -143,9 +143,12 @@ app.use(cors({
 // Request size limits
 // Debug middleware to log all requests
 app.use((req, res, next) => {
-    console.log(`📞 ${req.method} ${req.path}`);
+    console.log(`📞 ${req.method} ${req.url}`);
+    console.log(`   Path: ${req.path}`);
     console.log(`   Origin: ${req.headers.origin || 'NO ORIGIN'}`);
-    console.log(`   User-Agent: ${req.headers['user-agent']?.substring(0, 80)}...`);
+    console.log(`   Referer: ${req.headers.referer || 'NO REFERER'}`);
+    console.log(`   User-Agent: ${req.headers['user-agent']?.substring(0, 50)}...`);
+    console.log(`   ----------------------------------------`);
     next();
 });
 
