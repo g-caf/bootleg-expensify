@@ -405,16 +405,49 @@ class ExpenseGadget {
         // Dual range slider with auto-scan
         let scanTimeout = null;
         
+        // Helper function to get business period days
+        const getBusinessPeriodDays = () => {
+            const today = new Date();
+            const currentMonth = today.getMonth();
+            const currentYear = today.getFullYear();
+            
+            const monthStart = new Date(currentYear, currentMonth, 1);
+            const mtdDays = Math.floor((today - monthStart) / (1000 * 60 * 60 * 24));
+            
+            const lastMonthStart = new Date(currentYear, currentMonth - 1, 1);
+            const lastMonthDays = Math.floor((today - lastMonthStart) / (1000 * 60 * 60 * 24));
+            
+            const quarterStartMonth = Math.floor(currentMonth / 3) * 3;
+            const quarterStart = new Date(currentYear, quarterStartMonth, 1);
+            const qtdDays = Math.floor((today - quarterStart) / (1000 * 60 * 60 * 24));
+            
+            return { mtdDays, lastMonthDays, qtdDays };
+        };
+        
+        // Helper function to convert days to business period names
+        const daysToBusinessPeriod = (days) => {
+            const { mtdDays, lastMonthDays, qtdDays } = getBusinessPeriodDays();
+            
+            if (days === 0) return 'today';
+            if (Math.abs(days - mtdDays) <= 1) return 'month-to-date';
+            if (Math.abs(days - lastMonthDays) <= 2) return 'last month';
+            if (Math.abs(days - qtdDays) <= 2) return 'quarter-to-date';
+            
+            return `${days} day${days > 1 ? 's' : ''} ago`;
+        };
+        
         // Mapping functions between slider position (0-100) and actual days
         const sliderPositionToDays = (position) => {
+            const { mtdDays, lastMonthDays, qtdDays } = getBusinessPeriodDays();
+            
             // Define key mapping points: [sliderPosition, actualDays]
             const mappingPoints = [
-                [0, 0],    // 0% = today
-                [20, 7],   // 20% = 7 days  
-                [40, 15],  // 40% = 15 days
-                [60, 30],  // 60% = 30 days
-                [80, 60],  // 80% = 60 days
-                [100, 90]  // 100% = 90 days
+                [0, 0],              // 0% = today
+                [20, mtdDays],       // 20% = month-to-date  
+                [40, lastMonthDays], // 40% = last month
+                [60, qtdDays],       // 60% = quarter-to-date
+                [80, qtdDays],       // 80% = between QTD and QTD
+                [100, qtdDays]       // 100% = quarter-to-date (max)
             ];
             
             // Find the two points to interpolate between
@@ -430,18 +463,21 @@ class ExpenseGadget {
             }
             
             // Fallback for values outside range
-            return position <= 0 ? 0 : 90;
+            const { qtdDays } = getBusinessPeriodDays();
+            return position <= 0 ? 0 : qtdDays;
         };
         
         const daysToSliderPosition = (days) => {
+            const { mtdDays, lastMonthDays, qtdDays } = getBusinessPeriodDays();
+            
             // Reverse mapping from days to slider position
             const mappingPoints = [
-                [0, 0],    // today = 0%
-                [7, 20],   // 7 days = 20%
-                [15, 40],  // 15 days = 40%
-                [30, 60],  // 30 days = 60%
-                [60, 80],  // 60 days = 80%
-                [90, 100]  // 90 days = 100%
+                [0, 0],              // today = 0%
+                [mtdDays, 20],       // MTD = 20%
+                [lastMonthDays, 40], // last month = 40%
+                [qtdDays, 60],       // QTD = 60%
+                [qtdDays, 80],       // QTD = 80%
+                [qtdDays, 100]       // QTD = 100%
             ];
             
             for (let i = 0; i < mappingPoints.length - 1; i++) {
@@ -500,9 +536,9 @@ class ExpenseGadget {
             const finalMinDays = sliderPositionToDays(finalMinPos);
             const finalMaxDays = sliderPositionToDays(finalMaxPos);
 
-            // Update display text with actual day values
-            const fromText = finalMinDays === 0 ? 'today' : `${finalMinDays} day${finalMinDays > 1 ? 's' : ''} ago`;
-            const toText = `${finalMaxDays} day${finalMaxDays > 1 ? 's' : ''} ago`;
+            // Update display text with business period names
+            const fromText = daysToBusinessPeriod(finalMinDays);
+            const toText = daysToBusinessPeriod(finalMaxDays);
             dayDisplay.textContent = `${fromText} to ${toText}`;
 
             // Update progress bar (use slider positions for visual consistency)
@@ -823,10 +859,10 @@ class ExpenseGadget {
         const dayDisplay = document.getElementById('dayDisplay');
         const rangeProgress = document.getElementById('rangeProgress');
 
-        // Reset to default values: from today (0%) to 7 days ago (20%)
+        // Reset to default values: from today (0%) to month-to-date (20%)
         dayRangeMin.value = '0'; // Today (left dot)
-        dayRangeMax.value = '20'; // 7 days ago (right dot)
-        dayDisplay.textContent = 'today to 7 days ago';
+        dayRangeMax.value = '20'; // Month-to-date (right dot)
+        dayDisplay.textContent = 'today to month-to-date';
 
         // Update progress bar
         const progressLeft = 0; // 0% from left
@@ -934,9 +970,15 @@ class ExpenseGadget {
     showScanResults(message) {
         const scanResultsArea = document.getElementById('scanResultsArea');
         const scanResultsText = document.getElementById('scanResultsText');
+        const searchResults = document.getElementById('searchResults');
 
         scanResultsText.textContent = message;
         scanResultsArea.style.display = 'block';
+
+        // Add class to search results to create space for processing message
+        if (searchResults) {
+            searchResults.classList.add('processing-active');
+        }
 
         // Force reflow for animation
         scanResultsArea.offsetHeight;
@@ -955,18 +997,69 @@ class ExpenseGadget {
 
     hideScanResults() {
         const scanResultsArea = document.getElementById('scanResultsArea');
+        const searchResults = document.getElementById('searchResults');
+        
         if (scanResultsArea) {
             scanResultsArea.classList.remove('show');
+            
+            // Remove class from search results to expand back to full space
+            if (searchResults) {
+                searchResults.classList.remove('processing-active');
+            }
+            
             setTimeout(() => {
                 scanResultsArea.style.display = 'none';
             }, 300);
         }
     }
 
+    // Calculate business period days ago values
+    getBusinessPeriodDays() {
+        const today = new Date();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        
+        // Month-to-date: 1st of current month to today
+        const monthStart = new Date(currentYear, currentMonth, 1);
+        const mtdDays = Math.floor((today - monthStart) / (1000 * 60 * 60 * 24));
+        
+        // Last month: full previous month
+        const lastMonthStart = new Date(currentYear, currentMonth - 1, 1);
+        const lastMonthEnd = new Date(currentYear, currentMonth, 0); // Last day of prev month
+        const lastMonthDays = Math.floor((today - lastMonthStart) / (1000 * 60 * 60 * 24));
+        
+        // Quarter-to-date: 1st of current quarter to today
+        const quarterStartMonth = Math.floor(currentMonth / 3) * 3; // 0, 3, 6, or 9
+        const quarterStart = new Date(currentYear, quarterStartMonth, 1);
+        const qtdDays = Math.floor((today - quarterStart) / (1000 * 60 * 60 * 24));
+        
+        return { mtdDays, lastMonthDays, qtdDays };
+    }
+    
+    // Convert days ago to business period name
+    daysToBusinessPeriod(days) {
+        const { mtdDays, lastMonthDays, qtdDays } = this.getBusinessPeriodDays();
+        
+        if (days === 0) return 'today';
+        if (Math.abs(days - mtdDays) <= 1) return 'month-to-date';
+        if (Math.abs(days - lastMonthDays) <= 2) return 'last month';
+        if (Math.abs(days - qtdDays) <= 2) return 'quarter-to-date';
+        
+        // Fallback to days for intermediate values
+        return `${days} day${days > 1 ? 's' : ''} ago`;
+    }
+    
     // Mapping functions between slider position (0-100) and actual days
     sliderPositionToDays(position) {
+        const { mtdDays, lastMonthDays, qtdDays } = this.getBusinessPeriodDays();
+        
         const mappingPoints = [
-            [0, 0], [20, 7], [40, 15], [60, 30], [80, 60], [100, 90]
+            [0, 0],           // Today
+            [20, mtdDays],    // Month-to-date
+            [40, lastMonthDays], // Last month
+            [60, qtdDays],    // Quarter-to-date  
+            [80, qtdDays],    // Between QTD and QTD
+            [100, qtdDays]    // Quarter-to-date (max)
         ];
         
         for (let i = 0; i < mappingPoints.length - 1; i++) {
@@ -979,7 +1072,7 @@ class ExpenseGadget {
             }
         }
         
-        return position <= 0 ? 0 : 90;
+        return position <= 0 ? 0 : qtdDays;
     }
 
     async scanGmail() {
@@ -1069,10 +1162,10 @@ class ExpenseGadget {
         const startTime = Date.now();
         let pollCount = 0;
 
-        // Clear the processing message after a short delay
+        // Clear the processing message after 4 seconds
         setTimeout(() => {
             this.hideScanResults();
-        }, 2000);
+        }, 4000);
 
         const poll = async () => {
             try {

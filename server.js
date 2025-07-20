@@ -1240,12 +1240,12 @@ async function processEmailContent(htmlContent, subject, sender, tokens, emailDa
         console.log(`    📝 Extracted text length: ${text.length}`);
         console.log(`    📄 Text sample: "${text.substring(0, 200)}..."`);
 
-        // Extract vendor, amount, and date from email content
+        // Extract vendor - prioritize domain names, only use text for Gmail
         console.log(`    🏪 Extracting vendor...`);
-        let vendor = extractVendor(text);
+        let vendor = null;
         
-        // Try to extract vendor from original sender first, then current sender
-        if (!vendor && originalSender) {
+        // First try to extract vendor from original sender, then current sender
+        if (originalSender) {
             console.log(`    🔄 Trying original sender: ${originalSender}`);
             vendor = extractVendorFromSender(originalSender);
         }
@@ -1253,9 +1253,20 @@ async function processEmailContent(htmlContent, subject, sender, tokens, emailDa
             vendor = extractVendorFromSender(sender);
         }
 
-        // Try to extract vendor from subject if still not found
-        if (!vendor && subject) {
-            vendor = extractVendorFromSubject(subject);
+        // Only use text extraction if sender is Gmail (forwarded emails)
+        if (!vendor) {
+            const isFromGmail = sender && sender.toLowerCase().includes('@gmail.com');
+            if (isFromGmail) {
+                console.log(`    📧 Gmail sender detected, using text extraction`);
+                vendor = extractVendor(text);
+                
+                // Try subject as fallback for Gmail
+                if (!vendor && subject) {
+                    vendor = extractVendorFromSubject(subject);
+                }
+            } else {
+                console.log(`    🏢 Non-Gmail sender, skipping text extraction`);
+            }
         }
         
         console.log(`    💰 Extracting amount...`);

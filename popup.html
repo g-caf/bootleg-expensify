@@ -157,6 +157,11 @@
         .search-results {
             flex: 1;
             overflow-y: auto;
+            transition: margin-bottom 0.3s ease;
+        }
+        
+        .search-results.processing-active {
+            margin-bottom: 80px; /* Space for processing message */
         }
         
         .search-result-item {
@@ -624,11 +629,10 @@
             
             <div class="range-labels">
                 <span>Today</span>
-                <span class="tick-label" style="left: 20%;">7d</span>
-                <span class="tick-label" style="left: 40%;">15d</span>
-                <span class="tick-label" style="left: 60%;">30d</span>
-                <span class="tick-label" style="left: 80%;">60d</span>
-                <span>90d ago</span>
+                <span class="tick-label" style="left: 20%;">MTD</span>
+                <span class="tick-label" style="left: 40%;">Last Month</span>
+                <span class="tick-label" style="left: 60%;">QTD</span>
+                <span>QTD</span>
             </div>
         </div>
         
