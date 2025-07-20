@@ -2217,20 +2217,27 @@ app.post('/convert-email-to-pdf', async (req, res) => {
         console.log(`Final date: ${receiptDate}`);
 
         // Create smart filename
+        console.log(`=== FILENAME CREATION DEBUG ===`);
+        console.log(`Has vendor: ${!!vendor}, Has amount: ${!!amount}`);
+        
         let outputFilename;
         if (vendor && amount) {
             const dateStr = receiptDate || new Date().toISOString().split('T')[0];
             outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
+            console.log(`Using vendor+amount filename: ${outputFilename}`);
         } else if (vendor) {
             const dateStr = receiptDate || new Date().toISOString().split('T')[0];
             outputFilename = `${vendor} ${dateStr}.pdf`;
+            console.log(`Using vendor-only filename: ${outputFilename}`);
         } else {
             const dateStr = receiptDate || new Date().toISOString().split('T')[0];
             const subject = emailContent.subject || 'Email';
             outputFilename = `${subject.substring(0, 30)} ${dateStr}.pdf`;
+            console.log(`Using fallback subject filename: ${outputFilename}`);
         }
 
-        console.log(`Manual convert filename: ${outputFilename}`);
+        console.log(`=== FINAL FILENAME BEFORE PDF GENERATION ===`);
+        console.log(`Output filename: "${outputFilename}"`);
 
         // Clean and process email body
         let cleanBody = htmlContent;
@@ -2383,25 +2390,29 @@ app.post('/convert-email-to-pdf', async (req, res) => {
             });
         }
 
-        // Create filename
-        const date = new Date().toISOString().split('T')[0];
-        const subject = (emailContent.subject || 'Email').replace(/[^a-zA-Z0-9]/g, '_');
-        const filename = `${subject}_${date}.pdf`;
+        // Use our smart filename for Google Drive upload
+        console.log(`=== GOOGLE DRIVE UPLOAD DEBUG ===`);
+        console.log(`Using smart filename for upload: "${outputFilename}"`);
+        const date = receiptDate || new Date().toISOString().split('T')[0];
 
         // Upload to Google Drive if user is authenticated
         let driveUpload = null;
         if (req.session.googleTokens) {
             try {
-                driveUpload = await uploadToGoogleDrive(pdfBuffer, filename, date, req.session.googleTokens);
+                console.log(`Uploading to Google Drive with filename: "${outputFilename}"`);
+                driveUpload = await uploadToGoogleDrive(pdfBuffer, outputFilename, date, req.session.googleTokens);
             } catch (driveError) {
                 console.error('Google Drive upload failed:', driveError);
                 driveUpload = { success: false, error: driveError.message };
             }
         }
 
+        console.log(`=== FINAL RESPONSE ===`);
+        console.log(`Returning filename: "${outputFilename}"`);
+        
         res.json({
             success: true,
-            filename: filename,
+            filename: outputFilename,
             googleDrive: driveUpload
         });
 
