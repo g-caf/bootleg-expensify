@@ -804,10 +804,19 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
                 const subject = getHeader(msg.payload.headers, 'Subject') || 'Unknown Subject';
                 const sender = getHeader(msg.payload.headers, 'From') || 'Unknown Sender';
                 const date = getHeader(msg.payload.headers, 'Date') || 'Unknown Date';
+                
+                // Check for original sender in forwarded emails
+                const originalSender = getHeader(msg.payload.headers, 'X-Forwarded-From') ||
+                                     getHeader(msg.payload.headers, 'X-Original-Sender') ||
+                                     getHeader(msg.payload.headers, 'Reply-To') ||
+                                     getHeader(msg.payload.headers, 'Return-Path');
 
                 console.log(`  📧 Subject: ${subject}`);
                 console.log(`  👤 From: ${sender}`);
                 console.log(`  📅 Date: ${date}`);
+                if (originalSender) {
+                    console.log(`  🔄 Original sender: ${originalSender}`);
+                }
 
                 // Process the email content itself (convert HTML to PDF)
                 try {
@@ -823,7 +832,7 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
                     console.log(`    ✅ HTML content extracted: ${emailHTML.length} characters`);
 
                     // Convert HTML email to PDF and process
-                    const processed = await processEmailContent(emailHTML, subject, sender, req.session.googleTokens, date);
+                    const processed = await processEmailContent(emailHTML, subject, sender, req.session.googleTokens, date, originalSender);
 
                     console.log(`    📊 Processing result: ${processed.success ? '✅ SUCCESS' : '❌ FAILED'}`);
                     if (processed.vendor) console.log(`       Vendor: ${processed.vendor}`);
@@ -934,7 +943,7 @@ function extractEmailHTML(payload) {
 }
 
 // Helper function to process email content (convert to text receipt and extract data)
-async function processEmailContent(htmlContent, subject, sender, tokens, emailDate) {
+async function processEmailContent(htmlContent, subject, sender, tokens, emailDate, originalSender) {
     try {
         console.log(`    🔍 Processing email HTML content (${htmlContent.length} characters)`);
 
@@ -947,7 +956,11 @@ async function processEmailContent(htmlContent, subject, sender, tokens, emailDa
         console.log(`    🏪 Extracting vendor...`);
         let vendor = extractVendor(text);
         
-        // Try to extract vendor from sender if not found
+        // Try to extract vendor from original sender first, then current sender
+        if (!vendor && originalSender) {
+            console.log(`    🔄 Trying original sender: ${originalSender}`);
+            vendor = extractVendorFromSender(originalSender);
+        }
         if (!vendor && sender) {
             vendor = extractVendorFromSender(sender);
         }
@@ -1920,6 +1933,38 @@ app.get('/debug-pdfshift', requireDebugAuth, (req, res) => {
         keyPrefix: apiKey ? apiKey.substring(0, 8) + '...' : 'No key',
         keyLength: apiKey ? apiKey.length : 0
     });
+});
+
+// Debug endpoint to inspect email headers
+app.get('/debug/email-headers/:messageId', requireDebugAuth, async (req, res) => {
+    try {
+        if (!req.session.googleTokens) {
+            return res.status(401).json({ error: 'Not authenticated with Google' });
+        }
+
+        oauth2Client.setCredentials(req.session.googleTokens);
+        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+        const messageDetails = await gmail.users.messages.get({
+            userId: 'me',
+            id: req.params.messageId
+        });
+
+        const headers = messageDetails.data.payload.headers.map(h => ({
+            name: h.name,
+            value: h.value
+        }));
+
+        res.json({
+            messageId: req.params.messageId,
+            headers: headers,
+            headerCount: headers.length
+        });
+
+    } catch (error) {
+        console.error('Error fetching email headers:', error);
+        res.status(500).json(sanitizeError(error));
+    }
 });
 
 // Validate required environment variables
