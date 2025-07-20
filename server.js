@@ -867,8 +867,8 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
             // Forwarded DoorDash emails - look for DoorDash content in forwarded emails
             '(subject:Fwd OR subject:"Forwarded message") AND (DoorDash OR doordash.com OR "Order confirmed" OR "Your DoorDash receipt")',
             ') OR (',
-            // Broad DoorDash search - catch any email containing DoorDash (like manual search)
-            'DoorDash',
+            // Broad DoorDash receipt search - catch DoorDash receipts from any sender
+            'DoorDash AND (receipt OR "order confirmed" OR "order total" OR "delivery fee")',
             ') OR (',
             // Instacart receipts  
             'from:instacart.com (subject:receipt OR subject:"Your Instacart order receipt" OR subject:"Order receipt")',
@@ -1228,19 +1228,26 @@ async function processEmailContent(htmlContent, subject, sender, tokens, emailDa
         console.log(`    Final extraction: vendor=${vendor}, amount=${amount}, date=${receiptDate}`);
 
         // Skip emails without amounts - they're not receipts
-        // Exception: Allow DoorDash emails even without amounts (forwarded emails might have extraction issues)
-        const isDoorDashEmail = text.toLowerCase().includes('doordash') || 
-                               subject.toLowerCase().includes('doordash') || 
-                               sender.toLowerCase().includes('doordash');
+        // Exception: Allow DoorDash RECEIPT emails even without amounts (forwarded emails might have extraction issues)
+        const isDoorDashReceiptEmail = (text.toLowerCase().includes('doordash') || 
+                                       subject.toLowerCase().includes('doordash') || 
+                                       sender.toLowerCase().includes('doordash')) &&
+                                       (text.toLowerCase().includes('order confirmed') ||
+                                        text.toLowerCase().includes('your doordash receipt') ||
+                                        text.toLowerCase().includes('receipt') ||
+                                        text.toLowerCase().includes('order total') ||
+                                        text.toLowerCase().includes('delivery fee') ||
+                                        subject.toLowerCase().includes('order confirmed') ||
+                                        subject.toLowerCase().includes('receipt'));
         
-        if (!amount && !isDoorDashEmail) {
+        if (!amount && !isDoorDashReceiptEmail) {
             console.log(`    ❌ No amount found - skipping as this is not a receipt`);
             return {
                 success: false,
                 error: 'No amount found - not a receipt'
             };
-        } else if (!amount && isDoorDashEmail) {
-            console.log(`    ⚠️ DoorDash email with no amount found - processing anyway`);
+        } else if (!amount && isDoorDashReceiptEmail) {
+            console.log(`    ⚠️ DoorDash receipt email with no amount found - processing anyway`);
         }
 
         // Create output filename
