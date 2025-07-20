@@ -463,7 +463,6 @@ class ExpenseGadget {
             }
             
             // Fallback for values outside range
-            const { qtdDays } = getBusinessPeriodDays();
             return position <= 0 ? 0 : qtdDays;
         };
         
