@@ -75,6 +75,11 @@ const gmailMessageCache = new Map(); // Cache Gmail message details for 1 hour
 const vendorExtractionCache = new Map(); // Cache vendor extraction results
 const amountExtractionCache = new Map(); // Cache amount extraction results
 
+// Clear caches on startup to prevent stale data from affecting results
+console.log('Clearing extraction caches on startup...');
+vendorExtractionCache.clear();
+amountExtractionCache.clear();
+
 // Cache cleanup intervals (1 hour)
 const CACHE_TTL = 60 * 60 * 1000;
 
@@ -235,8 +240,9 @@ function sanitizeError(error) {
 function extractVendor(text) {
     console.log('  Extracting vendor from text (fallback)...');
     
-    // Check cache first
-    const cacheKey = `vendor_${text.substring(0, 100)}`;
+    // Check cache first - use a more unique cache key (hash of full text content)
+    const textHash = require('crypto').createHash('md5').update(text).digest('hex').substring(0, 12);
+    const cacheKey = `vendor_${textHash}`;
     const cached = vendorExtractionCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
         console.log('  📦 Using cached vendor extraction');
@@ -315,8 +321,9 @@ function extractVendor(text) {
 function extractAmount(text) {
     console.log('  Extracting amount from text...');
     
-    // Check cache first
-    const cacheKey = `amount_${text.substring(0, 200)}`;
+    // Check cache first - use a more unique cache key (hash of full text content)
+    const textHash = require('crypto').createHash('md5').update(text).digest('hex').substring(0, 12);
+    const cacheKey = `amount_${textHash}`;
     const cached = amountExtractionCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
         console.log('  📦 Using cached amount extraction');
