@@ -243,6 +243,101 @@
             background: #d1d5db;
             cursor: not-allowed;
         }
+
+        /* Scan result specific styles */
+        .processed-success {
+            border-left: 4px solid #10b981;
+        }
+
+        .processed-error {
+            border-left: 4px solid #ef4444;
+        }
+
+        .extraction-data {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .vendor-badge, .amount-badge, .date-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .vendor-badge {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .amount-badge {
+            background: #d1fae5;
+            color: #047857;
+        }
+
+        .date-badge {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .process-status {
+            font-size: 10px;
+            font-weight: 500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .status-success {
+            background: #d1fae5;
+            color: #047857;
+        }
+
+        .status-error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .error-message {
+            font-size: 9px;
+            color: #fca5a5;
+            margin-top: 2px;
+            text-align: right;
+            max-width: 105px;
+            word-wrap: break-word;
+        }
+
+        .email-content-preview {
+            margin-top: 8px;
+            padding: 8px;
+            background: #2d3748;
+            border-radius: 4px;
+            border: 1px solid #4a5568;
+        }
+
+        .content-header {
+            font-size: 10px;
+            font-weight: 500;
+            color: #a0aec0;
+            margin-bottom: 4px;
+        }
+
+        .content-text {
+            font-size: 11px;
+            color: #e2e8f0;
+            line-height: 1.4;
+            max-height: 100px;
+            overflow: hidden;
+        }
+
+        .content-truncated {
+            color: #9ca3af;
+            font-style: italic;
+        }
         
         .status {
             position: absolute;

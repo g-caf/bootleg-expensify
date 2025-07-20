@@ -2,13 +2,13 @@
 console.log('=== POPUP.JS STARTING ===');
 
 // Simple DOM ready approach
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM ready, creating ExpenseGadget...');
-    
+
     try {
         window.expenseGadget = new ExpenseGadget();
         console.log('ExpenseGadget created');
-        
+
         window.expenseGadget.init();
         console.log('ExpenseGadget initialized');
     } catch (error) {
@@ -29,7 +29,7 @@ class GmailClient {
             // This will open the same auth flow that's used for Google Drive
             const authUrl = 'https://bootleg-expensify.onrender.com/auth/google';
             window.open(authUrl, '_blank', 'width=500,height=600');
-            
+
             // Check for authentication status periodically
             return new Promise((resolve) => {
                 const checkInterval = setInterval(async () => {
@@ -73,12 +73,12 @@ class GmailClient {
     async checkStoredAuth() {
         try {
             console.log('GmailClient: checkStoredAuth started');
-            
+
             // ONLY trust server token - don't use stored tokens
             // This prevents client/server auth state mismatch
             const serverToken = await this.getTokenFromServer();
             console.log('GmailClient: serverToken result:', serverToken ? 'token received' : 'no token');
-            
+
             if (serverToken) {
                 this.accessToken = serverToken;
                 this.isAuthenticated = true;
@@ -134,7 +134,7 @@ class GmailClient {
             }
 
             const data = await response.json();
-            
+
             if (!data.messages || data.messages.length === 0) {
                 return [];
             }
@@ -142,7 +142,7 @@ class GmailClient {
             // Get message details for each result
             const emailPromises = data.messages.map(message => this.getMessageDetails(message.id));
             const emails = await Promise.all(emailPromises);
-            
+
             return emails.filter(email => email !== null);
         } catch (error) {
             console.error('Gmail search error:', error);
@@ -170,7 +170,7 @@ class GmailClient {
 
             const message = await response.json();
             const headers = message.payload.headers || [];
-            
+
             const subject = headers.find(h => h.name === 'Subject')?.value || 'No Subject';
             const from = headers.find(h => h.name === 'From')?.value || 'Unknown Sender';
             const date = headers.find(h => h.name === 'Date')?.value || 'No Date';
@@ -206,7 +206,7 @@ class GmailClient {
 
             const message = await response.json();
             const headers = message.payload.headers || [];
-            
+
             const subject = headers.find(h => h.name === 'Subject')?.value || 'No Subject';
             const from = headers.find(h => h.name === 'From')?.value || 'Unknown Sender';
             const date = headers.find(h => h.name === 'Date')?.value || 'No Date';
@@ -214,7 +214,7 @@ class GmailClient {
             // Extract email body (HTML or plain text)
             let body = '';
             const payload = message.payload;
-            
+
             if (payload.body && payload.body.data) {
                 // Single part message
                 body = this.decodeBase64Url(payload.body.data);
@@ -328,7 +328,7 @@ class ExpenseGadget {
         const updateRangeDisplay = () => {
             const minVal = parseInt(dayRangeMin.value); // Days from today (0 = today)
             const maxVal = parseInt(dayRangeMax.value); // Days ago (7 = 7 days ago)
-            
+
             // Ensure min <= max (today or recent <= older days ago)
             if (minVal > maxVal) {
                 if (dayRangeMin === document.activeElement) {
@@ -337,21 +337,21 @@ class ExpenseGadget {
                     dayRangeMin.value = maxVal;
                 }
             }
-            
+
             const finalMin = Math.min(minVal, maxVal);
             const finalMax = Math.max(minVal, maxVal);
-            
+
             // Update display text
             const fromText = finalMin === 0 ? 'today' : `${finalMin} day${finalMin > 1 ? 's' : ''} ago`;
             const toText = `${finalMax} day${finalMax > 1 ? 's' : ''} ago`;
             dayDisplay.textContent = `${fromText} to ${toText}`;
-            
+
             // Update progress bar
             const progressLeft = (finalMin / 90) * 100;
             const progressWidth = ((finalMax - finalMin) / 90) * 100;
             rangeProgress.style.left = `${progressLeft}%`;
             rangeProgress.style.width = `${progressWidth}%`;
-            
+
             // Auto-scan after user stops moving sliders (debounced)
             if (scanTimeout) clearTimeout(scanTimeout);
             if (this.gmailClient && this.gmailClient.isAuthenticated) {
@@ -363,7 +363,7 @@ class ExpenseGadget {
 
         dayRangeMin.addEventListener('input', updateRangeDisplay);
         dayRangeMax.addEventListener('input', updateRangeDisplay);
-        
+
         // Gmail scan button
         const gmailScanBtn = document.getElementById('gmailScanBtn');
         gmailScanBtn.addEventListener('click', async () => {
@@ -381,12 +381,12 @@ class ExpenseGadget {
         searchInput.addEventListener('input', (e) => {
             this.handleSearchInput(e.target.value);
         });
-        
+
         // Hide slider when focusing on search input
         searchInput.addEventListener('focus', () => {
             this.hideDateRangeSlider();
         });
-        
+
         // Event delegation for convert buttons (dynamically created)
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('convert-btn')) {
@@ -405,10 +405,10 @@ class ExpenseGadget {
     async processFiles(files) {
         console.log('=== PROCESS FILES CALLED ===');
         console.log('Processing', files.length, 'files');
-        
+
         // Filter for PDF files only
         const pdfFiles = Array.from(files).filter(file => file.type === 'application/pdf');
-        
+
         if (pdfFiles.length === 0) {
             this.showStatus('❌ No PDF files found. Please select PDF files only.', 'error');
             return;
@@ -481,7 +481,7 @@ class ExpenseGadget {
         const progressCount = document.getElementById('progressCount');
 
         const percentage = ((current - 1) / total) * 100;
-        
+
         progressText.textContent = `Processing: ${fileName}`;
         progressBar.style.width = `${percentage}%`;
         progressCount.textContent = `${current - 1} of ${total} completed`;
@@ -519,43 +519,43 @@ class ExpenseGadget {
         console.log('=== START processReceipt ===');
         console.log('File name:', file.name);
         console.log('File size:', file.size);
-        
+
         try {
             // Create FormData
             const formData = new FormData();
             formData.append('pdf', file);
-            
+
             // Make request with timeout
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per file
-            
+
             const response = await fetch('https://bootleg-expensify.onrender.com/parse-receipt', {
                 method: 'POST',
                 body: formData,
                 signal: controller.signal
             });
-            
+
             clearTimeout(timeoutId);
-            
+
             if (!response.ok) {
                 console.error(`Server error for ${file.name}: ${response.status} ${response.statusText}`);
                 // Fallback to simple renaming
                 this.downloadFileWithFallbackName(file);
                 return false;
             }
-            
+
             const result = await response.json();
             console.log(`Server response for ${file.name}:`, result);
-            
+
             // Use the filename from the server or create a fallback
             const newFileName = result.filename || this.createFallbackFileName(file.name);
             this.downloadFile(file, newFileName);
-            
+
             return result.success || true; // Consider any successful response as success
-            
+
         } catch (error) {
             console.error(`Error processing ${file.name}:`, error);
-            
+
             // Fallback to simple renaming for any error
             this.downloadFileWithFallbackName(file);
             return false;
@@ -623,17 +623,17 @@ class ExpenseGadget {
 
     updateGmailAuthStatus(isAuthenticated) {
         console.log('updateGmailAuthStatus called with:', isAuthenticated);
-        
+
         // Enable search functionality if Gmail is authenticated
         const searchInput = document.getElementById('searchInput');
         if (searchInput) {
             searchInput.disabled = !isAuthenticated;
-            searchInput.placeholder = isAuthenticated 
+            searchInput.placeholder = isAuthenticated
                 ? 'Search your email for receipts...'
                 : 'Connect to Google to enable search';
             console.log('Updated search input. Disabled:', !isAuthenticated, 'Placeholder:', searchInput.placeholder);
         }
-        
+
         // Update scan button based on authentication status
         const gmailScanBtn = document.getElementById('gmailScanBtn');
         if (gmailScanBtn) {
@@ -658,12 +658,12 @@ class ExpenseGadget {
         const dayRangeMax = document.getElementById('dayRangeMax');
         const dayDisplay = document.getElementById('dayDisplay');
         const rangeProgress = document.getElementById('rangeProgress');
-        
+
         // Reset to default values: from today (0) to 7 days ago (7)
         dayRangeMin.value = '0'; // Today (left dot)
         dayRangeMax.value = '7'; // 7 days ago (right dot)
         dayDisplay.textContent = 'today to 7 days ago';
-        
+
         // Update progress bar
         const progressLeft = 0; // 0% from left
         const progressWidth = (7 / 90) * 100; // 7 days out of 90 (~7.8%)
@@ -673,20 +673,20 @@ class ExpenseGadget {
 
     showDateRangeSlider() {
         const dateRangeContainer = document.getElementById('dateRangeContainer');
-        
+
         // Show the slider with animation
         dateRangeContainer.style.display = 'block';
         // Force reflow for animation
         dateRangeContainer.offsetHeight;
         dateRangeContainer.classList.add('show');
-        
+
         // No button text change - keep it as "Scan Gmail"
     }
 
     hideDateRangeSlider() {
         const dateRangeContainer = document.getElementById('dateRangeContainer');
         const scanResultsArea = document.getElementById('scanResultsArea');
-        
+
         // Hide the slider with animation
         dateRangeContainer.classList.remove('show');
         setTimeout(() => {
@@ -694,7 +694,7 @@ class ExpenseGadget {
                 dateRangeContainer.style.display = 'none';
             }
         }, 300);
-        
+
         // Also hide scan results
         scanResultsArea.classList.remove('show');
         setTimeout(() => {
@@ -715,7 +715,7 @@ class ExpenseGadget {
         // Open Google authentication in new tab
         const authUrl = 'https://bootleg-expensify.onrender.com/auth/google';
         window.open(authUrl, '_blank', 'width=500,height=600');
-        
+
         // Check Gmail auth status periodically to see when authentication completes
         const checkInterval = setInterval(async () => {
             const isAuthenticated = await this.gmailClient.checkStoredAuth();
@@ -736,13 +736,13 @@ class ExpenseGadget {
     showStatus(message) {
         const status = document.getElementById('status');
         const searchResults = document.getElementById('searchResults');
-        
+
         status.textContent = message;
         status.style.display = 'block';
-        
+
         // Hide search results when showing status
         searchResults.style.opacity = '0.3';
-        
+
         // Keep messages visible for 8 seconds
         setTimeout(() => {
             status.style.display = 'none';
@@ -753,14 +753,14 @@ class ExpenseGadget {
     showScanResults(message) {
         const scanResultsArea = document.getElementById('scanResultsArea');
         const scanResultsText = document.getElementById('scanResultsText');
-        
+
         scanResultsText.textContent = message;
         scanResultsArea.style.display = 'block';
-        
+
         // Force reflow for animation
         scanResultsArea.offsetHeight;
         scanResultsArea.classList.add('show');
-        
+
         // Keep results visible for 8 seconds
         setTimeout(() => {
             scanResultsArea.classList.remove('show');
@@ -774,28 +774,28 @@ class ExpenseGadget {
 
     async scanGmail() {
         console.log('=== GMAIL SCAN STARTED ===');
-        
+
         const gmailScanBtn = document.getElementById('gmailScanBtn');
         const searchResults = document.getElementById('searchResults');
         const loading = document.getElementById('loading');
         const dayRangeMin = document.getElementById('dayRangeMin');
         const dayRangeMax = document.getElementById('dayRangeMax');
-        
+
         // Get selected date range (search backward from today)
         const startDays = parseInt(dayRangeMin.value); // Start (0 = today)
         const endDays = parseInt(dayRangeMax.value); // End (90 = 90 days ago)
         console.log(`Scanning from ${startDays === 0 ? 'today' : startDays + ' days ago'} backward to ${endDays} days ago`);
-        
+
         // Clear search results and show loading
         searchResults.innerHTML = '';
         loading.classList.add('show');
-        
+
         // Keep date range slider visible during scan
-        
+
         // Disable button and show loading
         gmailScanBtn.disabled = true;
         gmailScanBtn.textContent = 'Scanning...';
-        
+
         try {
             const response = await fetch('https://bootleg-expensify.onrender.com/scan-gmail', {
                 method: 'POST',
@@ -808,27 +808,30 @@ class ExpenseGadget {
                     dayRangeTo: startDays    // Server expects "to" as newer date (0)
                 })
             });
-            
+
             if (!response.ok) {
                 throw new Error(`Server error: ${response.status}`);
             }
-            
+
             const result = await response.json();
             console.log('Gmail scan result:', result);
-            
+
             // Hide loading
             loading.classList.remove('show');
-            
-            // Show scan results below the slider
+
+            // Display scan results in the search results area
             const rangeText = result.daySpan ? ` from ${result.dayRangeFrom} to ${result.dayRangeTo} days ago (${result.daySpan} day${result.daySpan > 1 ? 's' : ''})` : '';
-            if (result.receiptsProcessed > 0) {
+
+            if (result.results && result.results.length > 0) {
+                // Display the actual email results
+                this.displayScanResults(result.results);
                 this.showScanResults(`Found and processed ${result.receiptsProcessed} receipts from ${result.receiptsFound} emails${rangeText}!`);
             } else if (result.receiptsFound > 0) {
                 this.showScanResults(`Found ${result.receiptsFound} potential receipt emails${rangeText}, but couldn't process them`);
             } else {
                 this.showScanResults(`No receipt emails found${rangeText}`);
             }
-            
+
         } catch (error) {
             console.error('Gmail scan error:', error);
             loading.classList.remove('show');
@@ -861,24 +864,24 @@ class ExpenseGadget {
     async searchEmails(query) {
         console.log('=== EMAIL SEARCH STARTED ===');
         console.log('Query:', query);
-        
+
         const searchResults = document.getElementById('searchResults');
-        
+
         // Check if Gmail is authenticated
         if (!this.gmailClient.isAuthenticated) {
             searchResults.innerHTML = '<div style="color: #dc2626; text-align: center; padding: 20px;">❌ Please connect to Google first</div>';
             return;
         }
-        
+
         // Show loading state
         searchResults.innerHTML = '<div style="color: #6b7280; text-align: center; padding: 20px;">🔍 Searching...</div>';
-        
+
         try {
             const results = await this.gmailClient.searchEmails(query);
             console.log('Search results:', results);
-            
+
             this.displaySearchResults(results);
-            
+
         } catch (error) {
             console.error('Search error:', error);
             searchResults.innerHTML = `<div style="color: #dc2626; text-align: center; padding: 20px;">❌ Search failed: ${error.message}</div>`;
@@ -887,22 +890,22 @@ class ExpenseGadget {
 
     displaySearchResults(results) {
         const searchResults = document.getElementById('searchResults');
-        
+
         if (!results || results.length === 0) {
             searchResults.innerHTML = '<div style="color: #6b7280; text-align: center; padding: 20px;">No emails found</div>';
             return;
         }
-        
+
         let html = '';
         results.forEach(email => {
             const emailId = email.id;
             const subject = email.subject || 'No Subject';
             const from = email.from || 'Unknown Sender';
             const date = email.date || 'No Date';
-            
+
             // Extract just the email address from from field
             const emailAddress = this.extractEmailAddress(from);
-            
+
             html += `<div class="search-result-item">`;
             html += `<div class="search-result-header">`;
             html += `<div class="search-result-left">`;
@@ -916,7 +919,69 @@ class ExpenseGadget {
             html += `</div>`;
             html += `</div>`;
         });
-        
+
+        searchResults.innerHTML = html;
+    }
+
+    displayScanResults(results) {
+        const searchResults = document.getElementById('searchResults');
+
+        if (!results || results.length === 0) {
+            searchResults.innerHTML = '<div style="color: #6b7280; text-align: center; padding: 20px;">No scan results found</div>';
+            return;
+        }
+
+        let html = '';
+        results.forEach(result => {
+            const messageId = result.messageId;
+            const subject = result.subject || 'No Subject';
+            const sender = result.sender || 'Unknown Sender';
+            const processed = result.processed;
+            const vendor = result.vendor || 'Not found';
+            const amount = result.amount || 'Not found';
+            const receiptDate = result.receiptDate || 'Not found';
+            const emailContent = result.emailContent || 'No content available';
+            const error = result.error;
+
+            // Extract just the email address from sender field
+            const emailAddress = this.extractEmailAddress(sender);
+
+            html += `<div class="search-result-item ${processed ? 'processed-success' : 'processed-error'}">`;
+            html += `<div class="search-result-header">`;
+            html += `<div class="search-result-left">`;
+            html += `<div class="search-result-subject">${this.escapeHtml(subject)}</div>`;
+            html += `<div class="search-result-from">From: ${this.escapeHtml(emailAddress)}</div>`;
+            if (processed) {
+                html += `<div class="extraction-data">`;
+                html += `<span class="vendor-badge">🏪 ${this.escapeHtml(vendor)}</span>`;
+                html += `<span class="amount-badge">💰 ${this.escapeHtml(amount)}</span>`;
+                html += `<span class="date-badge">📅 ${this.escapeHtml(receiptDate)}</span>`;
+                html += `</div>`;
+            }
+            html += `</div>`;
+            html += `<div class="search-result-right">`;
+            html += `<div class="process-status ${processed ? 'status-success' : 'status-error'}">`;
+            html += processed ? '✅ Processed' : '❌ Failed';
+            html += `</div>`;
+            if (error) {
+                html += `<div class="error-message">Error: ${this.escapeHtml(error)}</div>`;
+            }
+            html += `</div>`;
+            html += `</div>`;
+
+            // Show email content preview
+            html += `<div class="email-content-preview">`;
+            html += `<div class="content-header">Email Content:</div>`;
+            html += `<div class="content-text">${this.escapeHtml(emailContent.substring(0, 500))}`;
+            if (emailContent.length > 500) {
+                html += `<span class="content-truncated">... (content truncated)</span>`;
+            }
+            html += `</div>`;
+            html += `</div>`;
+
+            html += `</div>`;
+        });
+
         searchResults.innerHTML = html;
     }
 
@@ -928,16 +993,16 @@ class ExpenseGadget {
     async convertEmailToPdf(emailId, buttonElement) {
         console.log('=== CONVERT EMAIL TO PDF ===');
         console.log('Email ID:', emailId);
-        
+
         // Disable button and show loading
         buttonElement.disabled = true;
         buttonElement.textContent = 'Converting...';
-        
+
         try {
             // Get the full email content from Gmail (including body)
             const emailContent = await this.gmailClient.getFullMessageContent(emailId);
             console.log('Got full email content:', emailContent);
-            
+
             // Send to server for PDF conversion
             const response = await fetch('https://bootleg-expensify.onrender.com/convert-email-to-pdf', {
                 method: 'POST',
@@ -950,14 +1015,14 @@ class ExpenseGadget {
                     emailContent: emailContent
                 })
             });
-            
+
             if (!response.ok) {
                 throw new Error(`Server error: ${response.status}`);
             }
-            
+
             const result = await response.json();
             console.log('Conversion result:', result);
-            
+
             if (result.success) {
                 buttonElement.textContent = '✅ Done';
                 buttonElement.style.background = '#10b981';
@@ -965,14 +1030,14 @@ class ExpenseGadget {
             } else {
                 throw new Error(result.error || 'Conversion failed');
             }
-            
+
         } catch (error) {
             console.error('Convert error:', error);
             buttonElement.textContent = '❌ Failed';
             buttonElement.style.background = '#dc2626';
             this.showStatus(`❌ Failed to convert email: ${error.message}`, 'error');
         }
-        
+
         // Re-enable button after a delay
         setTimeout(() => {
             buttonElement.disabled = false;
@@ -998,8 +1063,8 @@ class ExpenseGadget {
     formatDate(dateString) {
         try {
             const date = new Date(dateString);
-            return date.toLocaleDateString('en-US', { 
-                month: 'short', 
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
                 day: 'numeric',
                 year: 'numeric'
             });
