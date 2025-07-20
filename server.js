@@ -749,14 +749,17 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
         oauth2Client.setCredentials(req.session.googleTokens);
         const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-        // Focused search for RECEIPTS (not delivery notifications) from Big 3 platforms
+        // Focused search for RECEIPTS (not delivery notifications) from Big 3 platforms + forwarded emails
         const query = [
             '(',
             // Amazon order confirmations (NOT deliveries)
             'from:amazon.com (subject:"Ordered:" OR subject:"Order Confirmation" OR subject:"Your Amazon.com order")',
             ') OR (',
-            // DoorDash receipts
+            // DoorDash receipts - both direct and forwarded
             'from:doordash.com (subject:receipt OR subject:"Order confirmed" OR subject:"Your DoorDash receipt")',
+            ') OR (',
+            // Forwarded DoorDash emails - look for DoorDash content in forwarded emails
+            '(subject:Fwd OR subject:"Forwarded message") AND (DoorDash OR doordash.com OR "Order confirmed" OR "Your DoorDash receipt")',
             ') OR (',
             // Instacart receipts  
             'from:instacart.com (subject:receipt OR subject:"Your Instacart order receipt" OR subject:"Order receipt")',
