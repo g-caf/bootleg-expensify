@@ -443,10 +443,9 @@ class ExpenseGadget {
             // Define key mapping points: [sliderPosition, actualDays]
             const mappingPoints = [
                 [0, 0],              // 0% = today
-                [20, mtdDays],       // 20% = month-to-date  
-                [40, lastMonthDays], // 40% = last month
-                [60, qtdDays],       // 60% = quarter-to-date
-                [80, qtdDays],       // 80% = between QTD and QTD
+                [25, mtdDays],       // 25% = month-to-date  
+                [50, lastMonthDays], // 50% = last month
+                [75, qtdDays],       // 75% = quarter-to-date
                 [100, qtdDays]       // 100% = quarter-to-date (max)
             ];
             
@@ -472,10 +471,9 @@ class ExpenseGadget {
             // Reverse mapping from days to slider position
             const mappingPoints = [
                 [0, 0],              // today = 0%
-                [mtdDays, 20],       // MTD = 20%
-                [lastMonthDays, 40], // last month = 40%
-                [qtdDays, 60],       // QTD = 60%
-                [qtdDays, 80],       // QTD = 80%
+                [mtdDays, 25],       // MTD = 25%
+                [lastMonthDays, 50], // last month = 50%
+                [qtdDays, 75],       // QTD = 75%
                 [qtdDays, 100]       // QTD = 100%
             ];
             
@@ -858,14 +856,14 @@ class ExpenseGadget {
         const dayDisplay = document.getElementById('dayDisplay');
         const rangeProgress = document.getElementById('rangeProgress');
 
-        // Reset to default values: from today (0%) to month-to-date (20%)
+        // Reset to default values: from today (0%) to month-to-date (25%)
         dayRangeMin.value = '0'; // Today (left dot)
-        dayRangeMax.value = '20'; // Month-to-date (right dot)
+        dayRangeMax.value = '25'; // Month-to-date (right dot)
         dayDisplay.textContent = 'today to month-to-date';
 
         // Update progress bar
         const progressLeft = 0; // 0% from left
-        const progressWidth = 20; // 20% width
+        const progressWidth = 25; // 25% width
         rangeProgress.style.left = `${progressLeft}%`;
         rangeProgress.style.width = `${progressWidth}%`;
     }
@@ -906,13 +904,8 @@ class ExpenseGadget {
             }
         }, 300);
 
-        // Also hide scan results
-        scanResultsArea.classList.remove('show');
-        setTimeout(() => {
-            if (!scanResultsArea.classList.contains('show')) {
-                scanResultsArea.style.display = 'none';
-            }
-        }, 300);
+        // Don't auto-hide scan results when hiding slider - let them persist
+        // (scan results have their own 4-second timer for processing messages)
 
         // Reset button text when slider is hidden (only if it's not in a scanning state)
         if (gmailScanBtn.textContent === 'Start Scanning') {
@@ -1039,10 +1032,23 @@ class ExpenseGadget {
     daysToBusinessPeriod(days) {
         const { mtdDays, lastMonthDays, qtdDays } = this.getBusinessPeriodDays();
         
+        console.log(`daysToBusinessPeriod: input=${days}, mtd=${mtdDays}, lastMonth=${lastMonthDays}, qtd=${qtdDays}`);
+        
         if (days === 0) return 'today';
-        if (Math.abs(days - mtdDays) <= 1) return 'month-to-date';
-        if (Math.abs(days - lastMonthDays) <= 2) return 'last month';
-        if (Math.abs(days - qtdDays) <= 2) return 'quarter-to-date';
+        
+        // Use larger tolerance and check closest match
+        const mtdDiff = Math.abs(days - mtdDays);
+        const lastMonthDiff = Math.abs(days - lastMonthDays);
+        const qtdDiff = Math.abs(days - qtdDays);
+        
+        // Find the closest match
+        if (mtdDiff <= lastMonthDiff && mtdDiff <= qtdDiff && mtdDiff <= 5) {
+            return 'month-to-date';
+        } else if (lastMonthDiff <= qtdDiff && lastMonthDiff <= 5) {
+            return 'last month';
+        } else if (qtdDiff <= 5) {
+            return 'quarter-to-date';
+        }
         
         // Fallback to days for intermediate values
         return `${days} day${days > 1 ? 's' : ''} ago`;
@@ -1054,10 +1060,9 @@ class ExpenseGadget {
         
         const mappingPoints = [
             [0, 0],           // Today
-            [20, mtdDays],    // Month-to-date
-            [40, lastMonthDays], // Last month
-            [60, qtdDays],    // Quarter-to-date  
-            [80, qtdDays],    // Between QTD and QTD
+            [25, mtdDays],    // Month-to-date
+            [50, lastMonthDays], // Last month
+            [75, qtdDays],    // Quarter-to-date  
             [100, qtdDays]    // Quarter-to-date (max)
         ];
         

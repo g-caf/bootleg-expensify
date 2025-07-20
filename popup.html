@@ -616,12 +616,11 @@
             <div class="dual-range-container">
                 <div class="dual-range-track"></div>
                 <div class="dual-range-progress" id="rangeProgress"></div>
-                <!-- Tick marks for common day values (visually evenly distributed) -->
+                <!-- Tick marks for business periods (visually evenly distributed) -->
                 <div class="tick-marks">
-                    <div class="tick-mark" style="left: 20%;" title="7 days"></div>
-                    <div class="tick-mark" style="left: 40%;" title="15 days"></div>
-                    <div class="tick-mark" style="left: 60%;" title="30 days"></div>
-                    <div class="tick-mark" style="left: 80%;" title="60 days"></div>
+                    <div class="tick-mark" style="left: 25%;" title="Month-to-date"></div>
+                    <div class="tick-mark" style="left: 50%;" title="Last month"></div>
+                    <div class="tick-mark" style="left: 75%;" title="Quarter-to-date"></div>
                 </div>
                 <input type="range" id="dayRangeMin" min="0" max="100" value="0" class="dual-range-input">
                 <input type="range" id="dayRangeMax" min="0" max="100" value="20" class="dual-range-input">
@@ -629,9 +628,9 @@
             
             <div class="range-labels">
                 <span>Today</span>
-                <span class="tick-label" style="left: 20%;">MTD</span>
-                <span class="tick-label" style="left: 40%;">Last Month</span>
-                <span class="tick-label" style="left: 60%;">QTD</span>
+                <span class="tick-label" style="left: 25%;">MTD</span>
+                <span class="tick-label" style="left: 50%;">Last Month</span>
+                <span class="tick-label" style="left: 75%;">QTD</span>
                 <span>QTD</span>
             </div>
         </div>
