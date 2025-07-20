@@ -88,10 +88,10 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: isProduction, // Use secure cookies in production
-        httpOnly: false, // Allow extension to access cookie (extensions are trusted environment)
+        secure: false, // Temporarily disable for debugging - extensions need special handling
+        httpOnly: false, // Allow extension to access cookie
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: 'none' // Required for cross-origin requests from extensions
+        sameSite: 'lax' // Change from 'none' to 'lax' for better compatibility
     }
 }));
 
