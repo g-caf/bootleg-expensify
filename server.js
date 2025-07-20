@@ -1230,10 +1230,10 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
         // Create output filename
         let outputFilename;
         if (vendor && amount) {
-            const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+            const dateStr = formatDateForFilename(receiptDate);
             outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
         } else {
-            const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+            const dateStr = formatDateForFilename(receiptDate);
             outputFilename = `Email Receipt ${dateStr}.pdf`;
         }
 
@@ -1314,6 +1314,25 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
             error: error.message
         };
     }
+}
+
+// Helper function to format dates for PDF filenames (MM.DD.YY format)
+function formatDateForFilename(dateInput) {
+    let date;
+    if (dateInput && typeof dateInput === 'string') {
+        // Try to parse existing date string
+        date = new Date(dateInput);
+    } else {
+        // Use current date
+        date = new Date();
+    }
+    
+    // Get month, day, year
+    const month = date.getMonth() + 1; // No leading zero
+    const day = date.getDate(); // No leading zero  
+    const year = date.getFullYear().toString().slice(-2); // Last 2 digits
+    
+    return `${month}.${day}.${year}`;
 }
 
 // Helper function to extract vendor from email sender
@@ -2222,15 +2241,15 @@ app.post('/convert-email-to-pdf', async (req, res) => {
         
         let outputFilename;
         if (vendor && amount) {
-            const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+            const dateStr = formatDateForFilename(receiptDate);
             outputFilename = `${vendor} ${dateStr} $${amount}.pdf`;
             console.log(`Using vendor+amount filename: ${outputFilename}`);
         } else if (vendor) {
-            const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+            const dateStr = formatDateForFilename(receiptDate);
             outputFilename = `${vendor} ${dateStr}.pdf`;
             console.log(`Using vendor-only filename: ${outputFilename}`);
         } else {
-            const dateStr = receiptDate || new Date().toISOString().split('T')[0];
+            const dateStr = formatDateForFilename(receiptDate);
             const subject = emailContent.subject || 'Email';
             outputFilename = `${subject.substring(0, 30)} ${dateStr}.pdf`;
             console.log(`Using fallback subject filename: ${outputFilename}`);
@@ -2393,7 +2412,7 @@ app.post('/convert-email-to-pdf', async (req, res) => {
         // Use our smart filename for Google Drive upload
         console.log(`=== GOOGLE DRIVE UPLOAD DEBUG ===`);
         console.log(`Using smart filename for upload: "${outputFilename}"`);
-        const date = receiptDate || new Date().toISOString().split('T')[0];
+        const date = formatDateForFilename(receiptDate);
 
         // Upload to Google Drive if user is authenticated
         let driveUpload = null;
