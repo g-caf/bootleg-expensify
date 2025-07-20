@@ -187,6 +187,92 @@ class GmailClient {
         }
     }
 
+    async getFullMessageContent(messageId) {
+        try {
+            console.log('Getting full message content for:', messageId);
+            const messageUrl = `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`;
+
+            const response = await fetch(messageUrl, {
+                headers: {
+                    'Authorization': `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                console.error(`Error getting full message ${messageId}: ${response.status}`);
+                return null;
+            }
+
+            const message = await response.json();
+            const headers = message.payload.headers || [];
+            
+            const subject = headers.find(h => h.name === 'Subject')?.value || 'No Subject';
+            const from = headers.find(h => h.name === 'From')?.value || 'Unknown Sender';
+            const date = headers.find(h => h.name === 'Date')?.value || 'No Date';
+
+            // Extract email body (HTML or plain text)
+            let body = '';
+            const payload = message.payload;
+            
+            if (payload.body && payload.body.data) {
+                // Single part message
+                body = this.decodeBase64Url(payload.body.data);
+            } else if (payload.parts) {
+                // Multi-part message - find HTML or text part
+                for (const part of payload.parts) {
+                    if (part.mimeType === 'text/html' && part.body && part.body.data) {
+                        body = this.decodeBase64Url(part.body.data);
+                        break;
+                    } else if (part.mimeType === 'text/plain' && part.body && part.body.data && !body) {
+                        // Use plain text as fallback
+                        const plainText = this.decodeBase64Url(part.body.data);
+                        body = plainText.replace(/\n/g, '<br>');
+                    } else if (part.parts) {
+                        // Nested parts (like multipart/alternative)
+                        for (const nestedPart of part.parts) {
+                            if (nestedPart.mimeType === 'text/html' && nestedPart.body && nestedPart.body.data) {
+                                body = this.decodeBase64Url(nestedPart.body.data);
+                                break;
+                            } else if (nestedPart.mimeType === 'text/plain' && nestedPart.body && nestedPart.body.data && !body) {
+                                const plainText = this.decodeBase64Url(nestedPart.body.data);
+                                body = plainText.replace(/\n/g, '<br>');
+                            }
+                        }
+                        if (body) break;
+                    }
+                }
+            }
+
+            console.log('Extracted body length:', body.length);
+            console.log('Body preview:', body.substring(0, 200));
+
+            return {
+                id: messageId,
+                subject: subject,
+                from: from,
+                date: date,
+                body: body || 'No content available'
+            };
+        } catch (error) {
+            console.error(`Error getting full message content for ${messageId}:`, error);
+            return null;
+        }
+    }
+
+    decodeBase64Url(data) {
+        try {
+            // Gmail uses base64url encoding, convert to regular base64
+            const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
+            // Add padding if needed
+            const padding = '='.repeat((4 - base64.length % 4) % 4);
+            return atob(base64 + padding);
+        } catch (error) {
+            console.error('Error decoding base64:', error);
+            return '';
+        }
+    }
+
     async logout() {
         this.isAuthenticated = false;
         this.accessToken = null;
@@ -848,9 +934,9 @@ class ExpenseGadget {
         buttonElement.textContent = 'Converting...';
         
         try {
-            // Get the email content from Gmail
-            const emailContent = await this.gmailClient.getMessageDetails(emailId);
-            console.log('Got email content:', emailContent);
+            // Get the full email content from Gmail (including body)
+            const emailContent = await this.gmailClient.getFullMessageContent(emailId);
+            console.log('Got full email content:', emailContent);
             
             // Send to server for PDF conversion
             const response = await fetch('https://bootleg-expensify.onrender.com/convert-email-to-pdf', {
