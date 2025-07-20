@@ -1129,6 +1129,10 @@ class ExpenseGadget {
             const emailContent = await this.gmailClient.getFullMessageContent(emailId);
             console.log('Got full email content:', emailContent);
 
+            // Clean the email content to remove images and reduce size
+            const cleanedEmailContent = this.cleanEmailContentForPdf(emailContent);
+            console.log('Cleaned email content for PDF conversion');
+
             // Send to server for PDF conversion
             const response = await fetch('https://bootleg-expensify.onrender.com/convert-email-to-pdf', {
                 method: 'POST',
@@ -1138,7 +1142,7 @@ class ExpenseGadget {
                 credentials: 'include',
                 body: JSON.stringify({
                     emailId: emailId,
-                    emailContent: emailContent
+                    emailContent: cleanedEmailContent
                 })
             });
 
@@ -1172,6 +1176,39 @@ class ExpenseGadget {
                 buttonElement.style.background = '#f44e40';
             }
         }, 3000);
+    }
+
+    cleanEmailContentForPdf(emailContent) {
+        // Create a copy to avoid modifying the original
+        const cleaned = { ...emailContent };
+        
+        if (cleaned.body) {
+            console.log(`Original email body size: ${cleaned.body.length} characters`);
+            
+            // Remove all image tags and their content
+            cleaned.body = cleaned.body.replace(/<img[^>]*>/gi, '[Image removed]');
+            
+            // Remove base64 embedded images 
+            cleaned.body = cleaned.body.replace(/data:image\/[^;]+;base64,[A-Za-z0-9+\/=]+/g, '[Embedded image removed]');
+            
+            // Remove background images from CSS
+            cleaned.body = cleaned.body.replace(/background-image:\s*url\([^)]+\)/gi, '');
+            
+            // Remove other large data URLs
+            cleaned.body = cleaned.body.replace(/data:[^;]+;base64,[A-Za-z0-9+\/=]{100,}/g, '[Large data removed]');
+            
+            // Remove excessive whitespace and line breaks
+            cleaned.body = cleaned.body.replace(/\s+/g, ' ').trim();
+            
+            // Truncate if still too large (keep under 100KB)
+            if (cleaned.body.length > 100000) {
+                cleaned.body = cleaned.body.substring(0, 100000) + '... [Content truncated]';
+            }
+            
+            console.log(`Cleaned email body size: ${cleaned.body.length} characters`);
+        }
+        
+        return cleaned;
     }
 
     escapeHtml(text) {
