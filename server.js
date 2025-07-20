@@ -935,7 +935,8 @@ app.get('/debug/test-pdfshift', async (req, res) => {
       });
     }
     
-    const pdfBuffer = await response.buffer();
+    const arrayBuffer = await response.arrayBuffer();
+    const pdfBuffer = Buffer.from(arrayBuffer);
     const pdfHeader = pdfBuffer.toString('ascii', 0, 4);
     
     console.log('Success! PDF generated, size:', pdfBuffer.length);
@@ -2236,7 +2237,8 @@ app.post('/convert-email-to-pdf', async (req, res) => {
         });
         
         if (response.ok) {
-          pdfBuffer = await response.buffer();
+          const arrayBuffer = await response.arrayBuffer();
+          pdfBuffer = Buffer.from(arrayBuffer);
           console.log('✅ PDF generated successfully with PDFShift');
         } else {
           const errorText = await response.text();
