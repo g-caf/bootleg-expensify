@@ -1352,7 +1352,7 @@ class ExpenseGadget {
             console.error('Convert error:', error);
             buttonElement.textContent = '❌ Failed';
             buttonElement.style.background = '#dc2626';
-            this.showStatus(`❌ Failed to convert email: ${error.message}`, 'error');
+            // No error popup - conversion fails silently
         }
 
         // Re-enable button after a delay

@@ -1732,7 +1732,17 @@ async function createEmailReceiptPDFWithPDFShift(data) {
         if (!pdfshiftResponse.ok) {
             const errorText = await pdfshiftResponse.text();
             console.error('    ❌ PDFShift API error:', pdfshiftResponse.status, errorText);
-            throw new Error(`PDFShift API error: ${pdfshiftResponse.status} - ${errorText}`);
+            
+            // Add specific handling for common errors
+            if (pdfshiftResponse.status === 429) {
+                throw new Error(`PDFShift rate limit exceeded. Please try again later.`);
+            } else if (pdfshiftResponse.status === 402) {
+                throw new Error(`PDFShift quota exceeded. Please check your account.`);
+            } else if (pdfshiftResponse.status === 401) {
+                throw new Error(`PDFShift authentication failed. Please check API key.`);
+            } else {
+                throw new Error(`PDFShift API error: ${pdfshiftResponse.status} - ${errorText}`);
+            }
         }
 
         const pdfBuffer = Buffer.from(await pdfshiftResponse.arrayBuffer());
