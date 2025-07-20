@@ -882,38 +882,43 @@ app.post('/debug/test-date-extraction', (req, res) => {
   res.json(result);
 });
 
-// Debug endpoint to test Browserless.io with detailed logging
-app.get('/debug/test-browserless', async (req, res) => {
+// Debug endpoint to test PDFShift with detailed logging
+app.get('/debug/test-pdfshift', async (req, res) => {
   try {
-    const token = process.env.BROWSERLESS_TOKEN;
-    console.log('=== BROWSERLESS DEBUG TEST ===');
+    const token = process.env.PDFSHIFT_API_KEY;
+    console.log('=== PDFSHIFT DEBUG TEST ===');
     console.log('Token available:', !!token);
     console.log('Token starts with:', token ? token.substring(0, 8) + '...' : 'N/A');
     
-    if (!token || token === 'YOUR_BROWSERLESS_TOKEN') {
-      return res.status(400).json({ error: 'BROWSERLESS_TOKEN not set' });
+    if (!token || token === 'YOUR_PDFSHIFT_KEY') {
+      return res.status(400).json({ error: 'PDFSHIFT_API_KEY not set' });
     }
     
     const simpleHTML = `<!DOCTYPE html>
 <html>
 <head><title>Test</title></head>
-<body><h1>Test PDF Generation</h1><p>This is a test from ${new Date().toISOString()}.</p></body>
+<body><h1>Test PDF Generation with PDFShift</h1><p>This is a test from ${new Date().toISOString()}.</p></body>
 </html>`;
     
     const requestBody = {
-      html: simpleHTML,
-      options: { format: 'A4' }
+      source: simpleHTML,
+      format: 'A4',
+      margin: '0.5in',
+      print_background: true
     };
     
-    console.log('Making request to Browserless.io...');
-    console.log('Request URL:', 'https://chrome.browserless.io/pdf');
+    console.log('Making request to PDFShift...');
+    console.log('Request URL:', 'https://api.pdfshift.io/v3/convert/pdf');
     console.log('Request body size:', JSON.stringify(requestBody).length);
     
-    const response = await fetch('https://chrome.browserless.io/pdf', {
+    const authHeader = `Basic ${Buffer.from('api:' + token).toString('base64')}`;
+    console.log('Auth header format:', authHeader.substring(0, 20) + '...');
+    
+    const response = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': authHeader
       },
       body: JSON.stringify(requestBody)
     });
@@ -925,7 +930,7 @@ app.get('/debug/test-browserless', async (req, res) => {
       const errorText = await response.text();
       console.log('Error response body:', errorText);
       return res.status(500).json({ 
-        error: `Browserless API error: ${response.status}`,
+        error: `PDFShift API error: ${response.status}`,
         details: errorText,
         headers: Object.fromEntries(response.headers.entries())
       });
@@ -946,7 +951,7 @@ app.get('/debug/test-browserless', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Browserless test error:', error);
+    console.error('PDFShift test error:', error);
     res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
@@ -2212,43 +2217,36 @@ app.post('/convert-email-to-pdf', async (req, res) => {
     
     // Convert HTML to PDF with fallback strategy
     let pdfBuffer;
-    const browserlessToken = process.env.BROWSERLESS_TOKEN;
+    const pdfshiftToken = process.env.PDFSHIFT_API_KEY;
     
-    // Try Browserless.io first
-    if (browserlessToken && browserlessToken !== 'YOUR_BROWSERLESS_TOKEN') {
+    // Try PDFShift first
+    if (pdfshiftToken && pdfshiftToken !== 'YOUR_PDFSHIFT_KEY') {
       try {
-        console.log('Attempting PDF generation with Browserless.io');
-        const response = await fetch('https://chrome.browserless.io/pdf', {
+        console.log('Attempting PDF generation with PDFShift');
+        const response = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${browserlessToken}`
+            'Authorization': `Basic ${Buffer.from('api:' + pdfshiftToken).toString('base64')}`
           },
           body: JSON.stringify({
-            html: htmlContent,
-            options: {
-              format: 'A4',
-              margin: {
-                top: '0.5in',
-                right: '0.5in',
-                bottom: '0.5in',
-                left: '0.5in'
-              },
-              printBackground: true
-            }
+            source: htmlContent,
+            format: 'A4',
+            margin: '0.5in',
+            print_background: true
           })
         });
         
         if (response.ok) {
           pdfBuffer = await response.buffer();
-          console.log('✅ PDF generated successfully with Browserless.io');
+          console.log('✅ PDF generated successfully with PDFShift');
         } else {
           const errorText = await response.text();
-          console.error('Browserless.io failed:', response.status, errorText);
-          throw new Error(`Browserless API error: ${response.status}`);
+          console.error('PDFShift failed:', response.status, errorText);
+          throw new Error(`PDFShift API error: ${response.status}`);
         }
-      } catch (browserlessError) {
-        console.error('Browserless.io error, falling back to html-pdf:', browserlessError.message);
+      } catch (pdfshiftError) {
+        console.error('PDFShift error, falling back to html-pdf:', pdfshiftError.message);
         pdfBuffer = null; // Will trigger fallback
       }
     }
