@@ -611,12 +611,12 @@
                 <div class="dual-range-container">
                     <div class="dual-range-track"></div>
                     <div class="dual-range-progress" id="rangeProgress"></div>
-                    <!-- Tick marks for common day values (evenly distributed visually) -->
+                    <!-- Tick marks for common day values (at actual mathematical positions) -->
                     <div class="tick-marks">
-                        <div class="tick-mark" style="left: 20%;" title="7 days"></div>
-                        <div class="tick-mark" style="left: 40%;" title="15 days"></div>
-                        <div class="tick-mark" style="left: 60%;" title="30 days"></div>
-                        <div class="tick-mark" style="left: 80%;" title="60 days"></div>
+                        <div class="tick-mark" style="left: 7.78%;" title="7 days"></div>    <!-- 7/90 = 7.78% -->
+                        <div class="tick-mark" style="left: 16.67%;" title="15 days"></div>  <!-- 15/90 = 16.67% -->
+                        <div class="tick-mark" style="left: 33.33%;" title="30 days"></div>  <!-- 30/90 = 33.33% -->
+                        <div class="tick-mark" style="left: 66.67%;" title="60 days"></div>  <!-- 60/90 = 66.67% -->
                     </div>
                     <input type="range" id="dayRangeMin" min="0" max="90" value="0" class="dual-range-input">
                     <input type="range" id="dayRangeMax" min="0" max="90" value="7" class="dual-range-input">
@@ -624,10 +624,10 @@
                 
                 <div class="range-labels">
                     <span>Today</span>
-                    <span class="tick-label" style="left: 20%;">7d</span>
-                    <span class="tick-label" style="left: 40%;">15d</span>
-                    <span class="tick-label" style="left: 60%;">30d</span>
-                    <span class="tick-label" style="left: 80%;">60d</span>
+                    <span class="tick-label" style="left: 7.78%;">7d</span>
+                    <span class="tick-label" style="left: 16.67%;">15d</span>
+                    <span class="tick-label" style="left: 33.33%;">30d</span>
+                    <span class="tick-label" style="left: 66.67%;">60d</span>
                     <span>90d ago</span>
                 </div>
             </div>
