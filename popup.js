@@ -326,12 +326,18 @@ class ExpenseGadget {
         // Dual range slider with auto-scan
         let scanTimeout = null;
         const snapToCommonValues = (value) => {
-            const snapPoints = [15, 30, 60];
-            const snapThreshold = 3; // Snap within 3 days of target
+            // Map visual positions to actual day values
+            const snapPoints = [
+                { visual: 18, actual: 7 },   // 20% of 90 = 18, but we want 7 days
+                { visual: 36, actual: 15 },  // 40% of 90 = 36, but we want 15 days  
+                { visual: 54, actual: 30 },  // 60% of 90 = 54, but we want 30 days
+                { visual: 72, actual: 60 }   // 80% of 90 = 72, but we want 60 days
+            ];
+            const snapThreshold = 4; // Snap within 4 slider units of visual position
 
-            for (const snapPoint of snapPoints) {
-                if (Math.abs(value - snapPoint) <= snapThreshold) {
-                    return snapPoint;
+            for (const point of snapPoints) {
+                if (Math.abs(value - point.visual) <= snapThreshold) {
+                    return point.actual;
                 }
             }
             return value;
