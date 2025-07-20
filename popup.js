@@ -130,7 +130,7 @@ class GmailClient {
             });
 
             if (response.status === 401) {
-                // Token expired, try to refresh from server
+                // Token expired, try to refresh from server or re-authenticate
                 console.log('Token expired, attempting to refresh...');
                 const newToken = await this.getTokenFromServer();
                 if (newToken) {
@@ -158,11 +158,20 @@ class GmailClient {
                     const emails = await Promise.all(emailPromises);
                     return emails.filter(email => email !== null);
                 } else {
-                    // No valid token available, user needs to re-authenticate
+                    // No server token available, reset to unauthenticated state
+                    console.log('Authentication expired, updating UI to require reconnection');
                     this.isAuthenticated = false;
                     this.accessToken = null;
                     await chrome.storage.local.remove(['gmailAccessToken']);
-                    throw new Error('Authentication expired. Please reconnect to Gmail.');
+                    
+                    // Update UI to show "Connect to Google" state
+                    const expenseGadget = window.expenseGadget;
+                    if (expenseGadget) {
+                        expenseGadget.updateGmailAuthStatus(false);
+                    }
+                    
+                    // Return empty results - user will see the UI changed to require auth
+                    return [];
                 }
             }
 
@@ -412,23 +421,23 @@ class ExpenseGadget {
             const currentYear = today.getFullYear();
             
             const monthStart = new Date(currentYear, currentMonth, 1);
-            const mtdDays = Math.floor((today - monthStart) / (1000 * 60 * 60 * 24));
+            const mtd = Math.floor((today - monthStart) / (1000 * 60 * 60 * 24));
             
             const lastMonthStart = new Date(currentYear, currentMonth - 1, 1);
-            const lastMonthDays = Math.floor((today - lastMonthStart) / (1000 * 60 * 60 * 24));
+            const lastMonth = Math.floor((today - lastMonthStart) / (1000 * 60 * 60 * 24));
             
             const quarterStartMonth = Math.floor(currentMonth / 3) * 3;
             const quarterStart = new Date(currentYear, quarterStartMonth, 1);
-            const qtdDays = Math.floor((today - quarterStart) / (1000 * 60 * 60 * 24));
+            const qtd = Math.floor((today - quarterStart) / (1000 * 60 * 60 * 24));
             
             // Last quarter: first day of previous quarter
             const lastQuarterStartMonth = quarterStartMonth - 3;
             const lastQuarterStart = lastQuarterStartMonth < 0 
                 ? new Date(currentYear - 1, lastQuarterStartMonth + 12, 1)
                 : new Date(currentYear, lastQuarterStartMonth, 1);
-            const lastQuarterDays = Math.floor((today - lastQuarterStart) / (1000 * 60 * 60 * 24));
+            const lastQuarter = Math.floor((today - lastQuarterStart) / (1000 * 60 * 60 * 24));
             
-            return { mtdDays, lastMonthDays, qtdDays, lastQuarterDays };
+            return { mtdDays: mtd, lastMonthDays: lastMonth, qtdDays: qtd, lastQuarterDays: lastQuarter };
         };
         
         // Helper function to convert days to business period names
