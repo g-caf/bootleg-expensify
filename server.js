@@ -903,8 +903,7 @@ app.get('/debug/test-pdfshift', async (req, res) => {
     const requestBody = {
       source: simpleHTML,
       format: 'A4',
-      margin: '0.5in',
-      print_background: true
+      margin: '0.5in'
     };
     
     console.log('Making request to PDFShift...');
@@ -2232,8 +2231,7 @@ app.post('/convert-email-to-pdf', async (req, res) => {
           body: JSON.stringify({
             source: htmlContent,
             format: 'A4',
-            margin: '0.5in',
-            print_background: true
+            margin: '0.5in'
           })
         });
         
