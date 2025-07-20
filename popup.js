@@ -956,9 +956,13 @@ class ExpenseGadget {
             loading.classList.remove('show');
             this.showStatus('Failed to scan Gmail. Check your connection.');
         } finally {
-            // Re-enable button and reset to scan state
+            // Re-enable button but keep state based on slider visibility
             gmailScanBtn.disabled = false;
-            gmailScanBtn.textContent = 'Scan Gmail';
+            const dateRangeContainer = document.getElementById('dateRangeContainer');
+            const sliderVisible = dateRangeContainer.classList.contains('show');
+            
+            // If slider is still visible, keep it as "Start Scanning", otherwise reset to "Scan Gmail"
+            gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
         }
     }
 

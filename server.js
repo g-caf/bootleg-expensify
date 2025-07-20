@@ -1218,6 +1218,15 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
 
         console.log(`    Final extraction: vendor=${vendor}, amount=${amount}, date=${receiptDate}`);
 
+        // Skip emails without amounts - they're not receipts
+        if (!amount) {
+            console.log(`    ❌ No amount found - skipping as this is not a receipt`);
+            return {
+                success: false,
+                error: 'No amount found - not a receipt'
+            };
+        }
+
         // Create output filename
         let outputFilename;
         if (vendor && amount) {
@@ -1311,32 +1320,89 @@ async function processEmailContent(htmlContent, subject, sender, tokens) {
 function extractVendorFromSender(sender) {
     console.log(`    Extracting vendor from sender: ${sender}`);
 
-    // Common email patterns
-    const patterns = [
-        // Amazon patterns
-        /amazon/i,
-        // Instacart patterns  
-        /instacart/i,
-        // Food delivery patterns
-        /doordash/i,
-        /uber/i,
-        /grubhub/i,
-        // Retail patterns
-        /target/i,
-        /walmart/i,
-        /starbucks/i,
-        /costco/i
-    ];
+    // Extract domain from email address
+    const emailMatch = sender.match(/@([^>.\s]+\.[^>.\s]+)/);
+    if (!emailMatch) return null;
+    
+    const domain = emailMatch[1].toLowerCase();
+    console.log(`      Extracted domain: ${domain}`);
 
-    for (const pattern of patterns) {
-        if (pattern.test(sender)) {
-            const match = sender.match(/([a-zA-Z]+)/);
-            if (match) {
-                const vendor = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
-                console.log(`      Found vendor from sender: ${vendor}`);
-                return vendor;
-            }
+    // Comprehensive domain-to-vendor mapping
+    const domainMappings = {
+        // Major retailers
+        'amazon.com': 'Amazon',
+        'amazon.ca': 'Amazon',
+        'amazon.co.uk': 'Amazon',
+        'target.com': 'Target',
+        'walmart.com': 'Walmart',
+        'costco.com': 'Costco',
+        'samsclub.com': 'Sam\'s Club',
+        'homedepot.com': 'Home Depot',
+        'lowes.com': 'Lowe\'s',
+        'bestbuy.com': 'Best Buy',
+        
+        // Food delivery
+        'doordash.com': 'DoorDash',
+        'ubereats.com': 'Uber Eats',
+        'uber.com': 'Uber',
+        'grubhub.com': 'Grubhub',
+        'postmates.com': 'Postmates',
+        'seamless.com': 'Seamless',
+        
+        // Grocery delivery
+        'instacart.com': 'Instacart',
+        'shipt.com': 'Shipt',
+        'freshdirect.com': 'FreshDirect',
+        
+        // Food & Coffee
+        'starbucks.com': 'Starbucks',
+        'dunkindonuts.com': 'Dunkin\'',
+        'mcdonalds.com': 'McDonald\'s',
+        'chipotle.com': 'Chipotle',
+        'dominos.com': 'Domino\'s',
+        'pizzahut.com': 'Pizza Hut',
+        
+        // Airlines
+        'delta.com': 'Delta',
+        'united.com': 'United Airlines',
+        'american.com': 'American Airlines',
+        'southwest.com': 'Southwest',
+        'jetblue.com': 'JetBlue',
+        
+        // Subscription services
+        'netflix.com': 'Netflix',
+        'spotify.com': 'Spotify',
+        'apple.com': 'Apple',
+        'microsoft.com': 'Microsoft',
+        'adobe.com': 'Adobe',
+        
+        // Other common vendors
+        'paypal.com': 'PayPal',
+        'venmo.com': 'Venmo',
+        'square.com': 'Square',
+        'stripe.com': 'Stripe'
+    };
+
+    // Check exact domain match first
+    if (domainMappings[domain]) {
+        console.log(`      Found vendor from domain mapping: ${domainMappings[domain]}`);
+        return domainMappings[domain];
+    }
+
+    // Check if domain contains known vendor names
+    for (const [vendorDomain, vendorName] of Object.entries(domainMappings)) {
+        if (domain.includes(vendorDomain.split('.')[0])) {
+            console.log(`      Found vendor from domain substring: ${vendorName}`);
+            return vendorName;
         }
+    }
+
+    // Fallback: extract company name from domain
+    const companyName = domain.split('.')[0];
+    if (companyName && companyName.length > 2) {
+        const vendor = companyName.charAt(0).toUpperCase() + companyName.slice(1);
+        console.log(`      Extracted vendor from domain: ${vendor}`);
+        return vendor;
     }
 
     return null;
