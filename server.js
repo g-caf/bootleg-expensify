@@ -2216,7 +2216,7 @@ app.post('/convert-email-to-pdf', async (req, res) => {
         }
 
         // Create HTML from email content
-        const htmlContent = `
+        const pdfHtmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -2308,7 +2308,7 @@ app.post('/convert-email-to-pdf', async (req, res) => {
                         'Authorization': `Basic ${Buffer.from('api:' + pdfshiftToken).toString('base64')}`
                     },
                     body: JSON.stringify({
-                        source: htmlContent,
+                        source: pdfHtmlContent,
                         format: 'A4',
                         margin: '0.5in'
                     })
@@ -2333,7 +2333,7 @@ app.post('/convert-email-to-pdf', async (req, res) => {
         if (!pdfBuffer) {
             console.log('Using html-pdf fallback for PDF generation');
             pdfBuffer = await new Promise((resolve, reject) => {
-                htmlPdf.create(htmlContent, {
+                htmlPdf.create(pdfHtmlContent, {
                     format: 'A4',
                     border: {
                         top: '0.5in',
