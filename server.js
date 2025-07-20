@@ -1105,8 +1105,12 @@ app.post('/scan-gmail', strictLimiter, async (req, res) => {
 });
 
 // Endpoint to check scan status and get results
-app.get('/scan-status/:scanId', requireAuth, (req, res) => {
+app.get('/scan-status/:scanId', (req, res) => {
     try {
+        if (!req.session.googleTokens) {
+            return res.status(401).json({ error: 'Not authenticated with Google' });
+        }
+        
         const { scanId } = req.params;
         
         if (!global.scanResults || !global.scanResults.has(scanId)) {
