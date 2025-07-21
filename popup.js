@@ -543,6 +543,11 @@ class ExpenseGadget {
         };
 
         const updateRangeDisplay = () => {
+            // Guard against null elements (when in autoscan mode)
+            if (!dayRangeMin || !dayRangeMax || !dayDisplay || !rangeProgress) {
+                return;
+            }
+            
             let minPos = parseInt(dayRangeMin.value); // Slider position (0-100)
             let maxPos = parseInt(dayRangeMax.value); // Slider position (0-100)
 
@@ -587,27 +592,39 @@ class ExpenseGadget {
             // This prevents auto-scanning when adjusting the slider
         };
 
-        dayRangeMin.addEventListener('input', updateRangeDisplay);
-        dayRangeMax.addEventListener('input', updateRangeDisplay);
+        // Only add event listeners if elements exist (they don't exist in autoscan mode)
+        if (dayRangeMin && dayRangeMax) {
+            dayRangeMin.addEventListener('input', updateRangeDisplay);
+            dayRangeMax.addEventListener('input', updateRangeDisplay);
+        }
 
         // Gmail scan button
         const gmailScanBtn = document.getElementById('gmailScanBtn');
-        gmailScanBtn.addEventListener('click', async () => {
-            console.log('=== GMAIL SCAN BUTTON CLICKED ===');
-            console.log('Button text:', gmailScanBtn.textContent);
-            
-            if (gmailScanBtn.textContent === 'Connect to Google') {
-                console.log('Connecting to Google...');
-                // Handle connection
-                await this.connectGoogleDrive();
-            } else if (gmailScanBtn.textContent === 'Autoscan') {
-                console.log('Showing autoscan interface...');
-                // Show autoscan interface
-                this.showAutoscanInterface();
-            } else {
-                console.log('Unknown button state:', gmailScanBtn.textContent);
-            }
-        });
+        console.log('Setting up click handler for gmailScanBtn:', gmailScanBtn);
+        
+        if (gmailScanBtn) {
+            gmailScanBtn.addEventListener('click', async () => {
+                console.log('=== GMAIL SCAN BUTTON CLICKED ===');
+                console.log('Button text:', gmailScanBtn.textContent);
+                console.log('Button text length:', gmailScanBtn.textContent.length);
+                console.log('Button text trimmed:', gmailScanBtn.textContent.trim());
+                
+                if (gmailScanBtn.textContent === 'Connect to Google') {
+                    console.log('Connecting to Google...');
+                    // Handle connection
+                    await this.connectGoogleDrive();
+                } else if (gmailScanBtn.textContent === 'Autoscan') {
+                    console.log('Showing autoscan interface...');
+                    // Show autoscan interface
+                    this.showAutoscanInterface();
+                } else {
+                    console.log('Unknown button state:', gmailScanBtn.textContent);
+                }
+            });
+            console.log('Click handler attached successfully');
+        } else {
+            console.error('gmailScanBtn element not found!');
+        }
 
         // Search input
         searchInput.addEventListener('input', (e) => {
@@ -897,22 +914,31 @@ class ExpenseGadget {
         const dayDisplay = document.getElementById('dayDisplay');
         const rangeProgress = document.getElementById('rangeProgress');
 
-        // Reset to default values: from today (0%) to month-to-date (25%)
-        dayRangeMin.value = '0'; // Today (left dot)
-        dayRangeMax.value = '25'; // Month-to-date (right dot)
-        dayDisplay.textContent = 'today to month-to-date';
+        // Only reset if elements exist (they don't exist in autoscan mode)
+        if (dayRangeMin && dayRangeMax && dayDisplay && rangeProgress) {
+            // Reset to default values: from today (0%) to month-to-date (25%)
+            dayRangeMin.value = '0'; // Today (left dot)
+            dayRangeMax.value = '25'; // Month-to-date (right dot)
+            dayDisplay.textContent = 'today to month-to-date';
 
-        // Update progress bar
-        const progressLeft = 0; // 0% from left
-        const progressWidth = 25; // 25% width
-        rangeProgress.style.left = `${progressLeft}%`;
-        rangeProgress.style.width = `${progressWidth}%`;
+            // Update progress bar
+            const progressLeft = 0; // 0% from left
+            const progressWidth = 25; // 25% width
+            rangeProgress.style.left = `${progressLeft}%`;
+            rangeProgress.style.width = `${progressWidth}%`;
+        }
     }
 
     showDateRangeSlider() {
         console.log('=== SHOW DATE RANGE SLIDER ===');
         const dateRangeContainer = document.getElementById('dateRangeContainer');
         const gmailScanBtn = document.getElementById('gmailScanBtn');
+
+        // If dateRangeContainer doesn't exist (autoscan mode), return early
+        if (!dateRangeContainer) {
+            console.log('dateRangeContainer not found - likely in autoscan mode');
+            return;
+        }
 
         console.log('Current button text:', gmailScanBtn.textContent);
         console.log('Slider currently visible:', dateRangeContainer.style.display !== 'none');
@@ -936,6 +962,12 @@ class ExpenseGadget {
         const dateRangeContainer = document.getElementById('dateRangeContainer');
         const scanResultsArea = document.getElementById('scanResultsArea');
         const gmailScanBtn = document.getElementById('gmailScanBtn');
+
+        // If dateRangeContainer doesn't exist (autoscan mode), return early
+        if (!dateRangeContainer) {
+            console.log('dateRangeContainer not found - likely in autoscan mode');
+            return;
+        }
 
         // Hide the slider with animation
         dateRangeContainer.classList.remove('show');
@@ -1201,7 +1233,7 @@ class ExpenseGadget {
             // Re-enable button but keep state based on slider visibility
             gmailScanBtn.disabled = false;
             const dateRangeContainer = document.getElementById('dateRangeContainer');
-            const sliderVisible = dateRangeContainer.classList.contains('show');
+            const sliderVisible = dateRangeContainer && dateRangeContainer.classList.contains('show');
             
             // If slider is still visible, keep it as "Start Scanning", otherwise reset to "Scan Gmail"
             gmailScanBtn.textContent = sliderVisible ? 'Start Scanning' : 'Scan Gmail';
@@ -1570,12 +1602,20 @@ class ExpenseGadget {
     }
 
     showAutoscanInterface() {
+        console.log('=== SHOW AUTOSCAN INTERFACE ===');
         // Show the autoscan container
         const autoscanContainer = document.getElementById('autoscanContainer');
-        autoscanContainer.style.display = 'block';
+        console.log('autoscanContainer:', autoscanContainer);
+        if (autoscanContainer) {
+            autoscanContainer.style.display = 'block';
+            autoscanContainer.classList.add('show'); // Add the 'show' class for visibility
+            console.log('Set autoscan container display to block and added show class');
+        } else {
+            console.error('autoscanContainer element not found!');
+        }
         
         // Hide search results
-        this.hideSearchResults();
+        this.clearSearchResults();
         this.hideScanResults();
     }
 

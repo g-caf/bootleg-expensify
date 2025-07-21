@@ -2304,13 +2304,23 @@ app.post('/extract-transactions', async (req, res) => {
 
         // Initialize Vision client
         let clientConfig;
+        console.log('Initializing Google Vision client...');
+        console.log('GOOGLE_SERVICE_ACCOUNT_JSON available:', !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+        
         if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-            const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-            clientConfig = {
-                projectId: credentials.project_id,
-                credentials: credentials
-            };
+            try {
+                const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+                console.log('Service account project ID:', credentials.project_id);
+                clientConfig = {
+                    projectId: credentials.project_id,
+                    credentials: credentials
+                };
+            } catch (parseError) {
+                console.error('Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', parseError);
+                throw new Error('Invalid service account credentials');
+            }
         } else {
+            console.log('Using local keyfile...');
             clientConfig = {
                 projectId: 'sourcegraph-dev',
                 keyFilename: './sourcegraph-dev-0fb0280dc0e5.json'
@@ -2344,9 +2354,19 @@ app.post('/extract-transactions', async (req, res) => {
 
     } catch (error) {
         console.error('Transaction extraction error:', error);
+        console.error('Error stack:', error.stack);
+        console.error('Error details:', {
+            name: error.name,
+            message: error.message,
+            code: error.code,
+            details: error.details
+        });
+        
         res.status(500).json({
             success: false,
-            error: error.message
+            error: `Vision API Error: ${error.message}`,
+            errorType: error.name || 'Unknown',
+            errorCode: error.code || 'N/A'
         });
     }
 });
