@@ -9,7 +9,7 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const validator = require('validator');
-// const vision = require('@google-cloud/vision');
+const vision = require('@google-cloud/vision');
 
 
 
@@ -2293,18 +2293,49 @@ const missingSessionSecret = !process.env.SESSION_SECRET;
 // Experimental Vision API endpoint for testing
 app.post('/vision-test', async (req, res) => {
     try {
-        // Temporarily disabled - debugging deployment issue
+        // Initialize Vision client - use environment variables in production, JSON file locally
+        let clientConfig;
+        
+        if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+            // Production: use environment variable
+            const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+            clientConfig = {
+                projectId: credentials.project_id,
+                credentials: credentials
+            };
+        } else {
+            // Local development: use JSON file
+            clientConfig = {
+                projectId: 'sourcegraph-dev',
+                keyFilename: './sourcegraph-dev-0fb0280dc0e5.json'
+            };
+        }
+        
+        const client = new vision.ImageAnnotatorClient(clientConfig);
+        console.log('Vision API client initialized successfully');
+        
+        // Test with a simple text detection on a sample image (base64 encoded text)
+        const testImageBase64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=';
+        
+        const [result] = await client.textDetection({
+            image: { content: Buffer.from(testImageBase64, 'base64') }
+        });
+        
         res.json({
-            success: false,
-            message: 'Vision API temporarily disabled - debugging deployment',
-            timestamp: new Date().toISOString()
+            success: true,
+            message: 'Vision API connected and working',
+            projectId: clientConfig.projectId,
+            timestamp: new Date().toISOString(),
+            environment: process.env.GOOGLE_SERVICE_ACCOUNT_JSON ? 'production' : 'development',
+            testResult: result.textAnnotations ? 'Text detection working' : 'No text detected in test image'
         });
         
     } catch (error) {
         console.error('Vision API test error:', error);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: error.message,
+            errorType: error.code || 'unknown'
         });
     }
 });
