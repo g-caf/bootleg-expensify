@@ -2356,26 +2356,74 @@ function parseAirbaseTransactions(textAnnotations) {
     const fullText = textAnnotations[0]?.description || '';
     const lines = fullText.split('\n').filter(line => line.trim());
     
-    const transactions = [];
+    // Extract vendors, amounts, and dates separately
+    const vendors = [];
+    const amounts = [];
+    const dates = [];
     
-    // Look for patterns like: "Amazon $45.67 Jan 15, 2025"
-    // or table rows with vendor, amount, date
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+    for (const line of lines) {
+        const trimmedLine = line.trim();
         
-        // Skip headers and empty lines
-        if (!line || line.toLowerCase().includes('vendor') || line.toLowerCase().includes('amount')) {
+        // Skip common non-transaction text
+        if (!trimmedLine || 
+            trimmedLine.toLowerCase().includes('sourcegraph') ||
+            trimmedLine.toLowerCase().includes('department') ||
+            trimmedLine.toLowerCase().includes('completed') ||
+            trimmedLine.toLowerCase().includes('physical card') ||
+            trimmedLine.length < 3) {
             continue;
         }
-
-        // Try to extract transaction data from the line
-        const transaction = parseTransactionLine(line);
-        if (transaction) {
-            transactions.push(transaction);
+        
+        // Check if this line is a vendor (looks like a merchant name)
+        if (isVendorLine(trimmedLine)) {
+            vendors.push(trimmedLine);
         }
+        
+        // Check if this line contains an amount
+        const amountMatch = trimmedLine.match(/(\d+\.\d{2})\s*USD/);
+        if (amountMatch) {
+            amounts.push('$' + amountMatch[1]);
+        }
+        
+        // Check if this line contains a date
+        const dateMatch = trimmedLine.match(/\b(Jul|Jun|Aug|Sep|Oct|Nov|Dec|Jan|Feb|Mar|Apr|May)\s+\d{1,2},?\s+\d{4}\b/);
+        if (dateMatch) {
+            dates.push(dateMatch[0]);
+        }
+    }
+    
+    // Match vendors with amounts and dates
+    const transactions = [];
+    const maxItems = Math.min(vendors.length, amounts.length);
+    
+    for (let i = 0; i < maxItems; i++) {
+        transactions.push({
+            vendor: vendors[i],
+            amount: amounts[i],
+            date: dates[i] || dates[Math.min(i, dates.length - 1)] || null,
+            rawLine: `${vendors[i]} ${amounts[i]} ${dates[i] || ''}`,
+            confidence: calculateConfidence(vendors[i], amounts[i], dates[i])
+        });
     }
 
     return transactions;
+}
+
+// Check if a line looks like a vendor/merchant name
+function isVendorLine(line) {
+    // Skip if it's clearly not a vendor
+    if (line.match(/^\d+\.\d{2}/) || // Starts with amount
+        line.match(/^(Jul|Jun|Aug|Sep|Oct|Nov|Dec|Jan|Feb|Mar|Apr|May)/) || // Starts with date
+        line.includes('(') || // Contains parentheses (likely descriptions)
+        line.length > 50) { // Too long to be a vendor name
+        return false;
+    }
+    
+    // Looks like a vendor if it has merchant-like patterns
+    return line.match(/^[A-Z*\s]+/) || // All caps (common for merchants)
+           line.includes('*') || // Contains * (common in merchant names)
+           line.match(/^(AMAZON|UBER|DD|TST|SQ|IC)/) || // Known merchant prefixes
+           (line.length > 5 && line.length < 35); // Reasonable vendor name length
 }
 
 // Parse individual transaction line
