@@ -2290,6 +2290,138 @@ const criticalEnvVars = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'PDFSHIFT_A
 const missingCriticalVars = criticalEnvVars.filter(envVar => !process.env[envVar]);
 const missingSessionSecret = !process.env.SESSION_SECRET;
 
+// Extract transactions from Airbase screenshots
+app.post('/extract-transactions', async (req, res) => {
+    try {
+        const { imageData } = req.body;
+        
+        if (!imageData) {
+            return res.status(400).json({
+                success: false,
+                error: 'No image data provided'
+            });
+        }
+
+        // Initialize Vision client
+        let clientConfig;
+        if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+            const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+            clientConfig = {
+                projectId: credentials.project_id,
+                credentials: credentials
+            };
+        } else {
+            clientConfig = {
+                projectId: 'sourcegraph-dev',
+                keyFilename: './sourcegraph-dev-0fb0280dc0e5.json'
+            };
+        }
+
+        const client = new vision.ImageAnnotatorClient(clientConfig);
+        
+        // Extract text from image
+        const imageBuffer = Buffer.from(imageData.replace(/^data:image\/[a-z]+;base64,/, ''), 'base64');
+        const [result] = await client.textDetection({
+            image: { content: imageBuffer }
+        });
+
+        if (!result.textAnnotations || result.textAnnotations.length === 0) {
+            return res.json({
+                success: false,
+                error: 'No text detected in image'
+            });
+        }
+
+        // Parse transactions from detected text
+        const transactions = parseAirbaseTransactions(result.textAnnotations);
+        
+        res.json({
+            success: true,
+            transactions: transactions,
+            rawText: result.textAnnotations[0]?.description, // Full text for debugging
+            detectedBlocks: result.textAnnotations.length
+        });
+
+    } catch (error) {
+        console.error('Transaction extraction error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Parse Airbase transaction data from Vision API text
+function parseAirbaseTransactions(textAnnotations) {
+    const fullText = textAnnotations[0]?.description || '';
+    const lines = fullText.split('\n').filter(line => line.trim());
+    
+    const transactions = [];
+    
+    // Look for patterns like: "Amazon $45.67 Jan 15, 2025"
+    // or table rows with vendor, amount, date
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Skip headers and empty lines
+        if (!line || line.toLowerCase().includes('vendor') || line.toLowerCase().includes('amount')) {
+            continue;
+        }
+
+        // Try to extract transaction data from the line
+        const transaction = parseTransactionLine(line);
+        if (transaction) {
+            transactions.push(transaction);
+        }
+    }
+
+    return transactions;
+}
+
+// Parse individual transaction line
+function parseTransactionLine(line) {
+    // Amount patterns: $123.45, $1,234.56
+    const amountMatch = line.match(/\$[\d,]+\.?\d*/);
+    
+    // Date patterns: Jan 15, 2025, 1/15/2025, 01/15/25
+    const dateMatch = line.match(/\b(\w{3}\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})\b/);
+    
+    if (!amountMatch) {
+        return null; // Must have an amount to be a transaction
+    }
+
+    // Extract vendor (everything before the amount, cleaned up)
+    const amountIndex = line.indexOf(amountMatch[0]);
+    let vendor = line.substring(0, amountIndex).trim();
+    
+    // Clean up vendor name
+    vendor = vendor.replace(/^[•\-\*\s]+/, '').trim(); // Remove bullets/dashes
+    vendor = vendor.replace(/\s+/g, ' ').trim(); // Normalize spaces
+    
+    if (!vendor || vendor.length < 2) {
+        return null; // Must have a reasonable vendor name
+    }
+
+    return {
+        vendor: vendor,
+        amount: amountMatch[0],
+        date: dateMatch ? dateMatch[0] : null,
+        rawLine: line,
+        confidence: calculateConfidence(vendor, amountMatch[0], dateMatch)
+    };
+}
+
+// Calculate confidence score for transaction parsing
+function calculateConfidence(vendor, amount, dateMatch) {
+    let score = 0.3; // Base score
+    
+    if (vendor.length > 2) score += 0.3;
+    if (amount.includes('.')) score += 0.2; // Has cents
+    if (dateMatch) score += 0.2;
+    
+    return Math.min(score, 1.0);
+}
+
 // Experimental Vision API endpoint for testing
 app.post('/vision-test', async (req, res) => {
     try {

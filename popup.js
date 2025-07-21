@@ -887,6 +887,18 @@ class ExpenseGadget {
         } else {
             console.error('Gmail scan button not found!');
         }
+
+        // Show/hide autoscan section based on authentication
+        const autoscanSection = document.getElementById('autoscanSection');
+        if (autoscanSection) {
+            autoscanSection.style.display = isAuthenticated ? 'block' : 'none';
+            
+            // Initialize autoscan functionality when authenticated
+            if (isAuthenticated && !this.autoscanInitialized) {
+                this.initializeAutoscan();
+                this.autoscanInitialized = true;
+            }
+        }
     }
 
     resetDateRangeSliders() {
@@ -1565,6 +1577,205 @@ class ExpenseGadget {
         } catch (e) {
             return dateString;
         }
+    }
+
+    // Autoscan functionality
+    initializeAutoscan() {
+        const pasteArea = document.getElementById('pasteArea');
+        const pastePlaceholder = document.getElementById('pastePlaceholder');
+        const pastePreview = document.getElementById('pastePreview');
+        const previewImage = document.getElementById('previewImage');
+        const processBtn = document.getElementById('processBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const autoscanSection = document.getElementById('autoscanSection');
+        const autoscanStatus = document.getElementById('autoscanStatus');
+
+        // Show autoscan section when authenticated
+        if (this.gmailClient && this.gmailClient.isAuthenticated) {
+            autoscanSection.style.display = 'block';
+        }
+
+        // Handle paste events
+        document.addEventListener('paste', (e) => {
+            // Only handle image paste if not in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+            
+            const items = e.clipboardData.items;
+            
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    e.preventDefault();
+                    const file = items[i].getAsFile();
+                    this.handleImageFile(file);
+                    break;
+                }
+            }
+        });
+
+        // Handle drag and drop
+        pasteArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            pasteArea.classList.add('dragover');
+        });
+
+        pasteArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            pasteArea.classList.remove('dragover');
+        });
+
+        pasteArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            pasteArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type.startsWith('image/')) {
+                this.handleImageFile(files[0]);
+            }
+        });
+
+        // Button handlers
+        processBtn.addEventListener('click', () => this.processAirbaseImage());
+        clearBtn.addEventListener('click', () => this.clearPastedImage());
+    }
+
+    handleImageFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const pastePlaceholder = document.getElementById('pastePlaceholder');
+            const pastePreview = document.getElementById('pastePreview');
+            const previewImage = document.getElementById('previewImage');
+            
+            previewImage.src = e.target.result;
+            pastePlaceholder.style.display = 'none';
+            pastePreview.style.display = 'block';
+            
+            // Store image data for processing
+            this.currentImageData = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    clearPastedImage() {
+        const pastePlaceholder = document.getElementById('pastePlaceholder');
+        const pastePreview = document.getElementById('pastePreview');
+        
+        pastePlaceholder.style.display = 'block';
+        pastePreview.style.display = 'none';
+        this.currentImageData = null;
+    }
+
+    async processAirbaseImage() {
+        if (!this.currentImageData) {
+            return;
+        }
+
+        const autoscanStatus = document.getElementById('autoscanStatus');
+        const autoscanResults = document.getElementById('autoscanResults');
+        const processBtn = document.getElementById('processBtn');
+
+        try {
+            // Update status
+            autoscanStatus.textContent = 'Analyzing...';
+            processBtn.disabled = true;
+
+            // Send image to backend for processing
+            const response = await fetch('https://bootleg-expensify.onrender.com/extract-transactions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    imageData: this.currentImageData
+                })
+            });
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to extract transactions');
+            }
+
+            // Display extracted transactions
+            this.displayExtractedTransactions(result.transactions);
+            
+            // Update status
+            autoscanStatus.textContent = `Found ${result.transactions.length} transactions`;
+            autoscanResults.style.display = 'block';
+
+        } catch (error) {
+            console.error('Autoscan error:', error);
+            autoscanStatus.textContent = 'Error analyzing image';
+            autoscanResults.innerHTML = `<div style="color: #ef4444;">Error: ${error.message}</div>`;
+            autoscanResults.style.display = 'block';
+        } finally {
+            processBtn.disabled = false;
+        }
+    }
+
+    displayExtractedTransactions(transactions) {
+        const autoscanResults = document.getElementById('autoscanResults');
+        
+        if (!transactions || transactions.length === 0) {
+            autoscanResults.innerHTML = '<div style="color: #6b7280;">No transactions found in image</div>';
+            return;
+        }
+
+        let html = '<div style="color: #d1d5db; font-size: 13px; margin-bottom: 8px;">Extracted Transactions:</div>';
+        
+        transactions.forEach((transaction, index) => {
+            const confidence = Math.round(transaction.confidence * 100);
+            html += `
+                <div style="background: #1f2937; border: 1px solid #374151; border-radius: 4px; padding: 8px; margin-bottom: 6px;">
+                    <div style="color: #f3f4f6; font-weight: 500;">${transaction.vendor}</div>
+                    <div style="color: #9ca3af; font-size: 12px;">
+                        ${transaction.amount} ${transaction.date ? '• ' + transaction.date : ''} • ${confidence}% confidence
+                    </div>
+                    <button class="process-btn" style="margin-top: 4px; font-size: 11px; padding: 4px 8px;" 
+                            onclick="window.expenseGadget.searchForTransaction(${index})">
+                        Find Receipt
+                    </button>
+                </div>
+            `;
+        });
+
+        autoscanResults.innerHTML = html;
+        
+        // Store transactions for searching
+        this.extractedTransactions = transactions;
+    }
+
+    async searchForTransaction(index) {
+        const transaction = this.extractedTransactions[index];
+        if (!transaction) return;
+
+        try {
+            // Build search query for this transaction
+            const query = this.buildTransactionSearchQuery(transaction);
+            
+            // Use existing search functionality
+            const searchInput = document.getElementById('searchInput');
+            searchInput.value = query;
+            
+            // Trigger search
+            await this.performSearch();
+            
+        } catch (error) {
+            console.error('Transaction search error:', error);
+        }
+    }
+
+    buildTransactionSearchQuery(transaction) {
+        // Build a smart search query for Gmail
+        let query = `"${transaction.vendor}"`;
+        
+        if (transaction.amount) {
+            const amount = transaction.amount.replace('$', '');
+            query += ` "${amount}"`;
+        }
+        
+        return query;
     }
 }
 
