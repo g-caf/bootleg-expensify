@@ -2346,14 +2346,20 @@ app.post('/extract-transactions', async (req, res) => {
         console.log('Vision API call successful');
 
         if (!result.textAnnotations || result.textAnnotations.length === 0) {
+            console.log('No text annotations found in Vision API result');
             return res.json({
                 success: false,
                 error: 'No text detected in image'
             });
         }
 
+        console.log('Text annotations found:', result.textAnnotations.length);
+        console.log('First annotation text preview:', result.textAnnotations[0]?.description?.substring(0, 200) + '...');
+
         // Parse transactions from detected text
+        console.log('Parsing transactions...');
         const transactions = parseAirbaseTransactions(result.textAnnotations);
+        console.log('Transactions parsed successfully, count:', transactions.length);
         
         res.json({
             success: true,
@@ -2383,8 +2389,14 @@ app.post('/extract-transactions', async (req, res) => {
 
 // Parse Airbase transaction data from Vision API text
 function parseAirbaseTransactions(textAnnotations) {
+    console.log('parseAirbaseTransactions called with', textAnnotations.length, 'annotations');
+    
     const fullText = textAnnotations[0]?.description || '';
+    console.log('Full text length:', fullText.length);
+    console.log('Full text preview:', fullText.substring(0, 300) + '...');
+    
     const lines = fullText.split('\n').filter(line => line.trim());
+    console.log('Lines found:', lines.length);
     
     // Extract vendors, amounts, and dates separately
     const vendors = [];
@@ -2435,6 +2447,14 @@ function parseAirbaseTransactions(textAnnotations) {
             confidence: calculateConfidence(vendors[i], amounts[i], dates[i])
         });
     }
+
+    console.log('Parsed results:', {
+        vendorsFound: vendors.length,
+        amountsFound: amounts.length,  
+        datesFound: dates.length,
+        transactionsCreated: transactions.length
+    });
+    console.log('Final transactions:', transactions);
 
     return transactions;
 }
