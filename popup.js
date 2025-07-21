@@ -1705,18 +1705,18 @@ class ExpenseGadget {
             console.log('Detected blocks:', result.detectedBlocks);
             console.log('Parsed transactions:', result.transactions);
             
-            // Update status
-            autoscanStatus.textContent = `Found ${result.transactions.length} transactions`;
-            
-            // Show debug text in results for now
-            const debugHtml = `
-                <div style="color: #9ca3af; font-size: 11px; margin-bottom: 8px; max-height: 150px; overflow-y: auto; background: #1f2937; padding: 8px; border-radius: 4px;">
-                    <strong>Debug - Raw detected text:</strong><br>
-                    <pre style="white-space: pre-wrap; font-size: 10px;">${result.rawText}</pre>
-                </div>
-            `;
-            autoscanResults.innerHTML = debugHtml + (autoscanResults.innerHTML || '');
-            autoscanResults.style.display = 'block';
+            // Update status and start automated processing
+            if (result.transactions.length > 0) {
+                autoscanStatus.textContent = `Processing ${result.transactions.length} transactions...`;
+                autoscanResults.style.display = 'block';
+                
+                // Automatically process all transactions
+                await this.processAllTransactions(result.transactions);
+            } else {
+                autoscanStatus.textContent = 'No transactions found';
+                autoscanResults.innerHTML = '<div style="color: #6b7280;">No transactions detected in the image</div>';
+                autoscanResults.style.display = 'block';
+            }
 
         } catch (error) {
             console.error('Autoscan error:', error);
@@ -1774,15 +1774,18 @@ class ExpenseGadget {
         if (!transaction) return;
 
         try {
+            console.log('Searching for transaction:', transaction);
+            
             // Build search query for this transaction
             const query = this.buildTransactionSearchQuery(transaction);
+            console.log('Search query:', query);
             
             // Use existing search functionality
             const searchInput = document.getElementById('searchInput');
             searchInput.value = query;
             
             // Trigger search
-            await this.performSearch();
+            await this.handleSearch();
             
         } catch (error) {
             console.error('Transaction search error:', error);
@@ -1799,6 +1802,91 @@ class ExpenseGadget {
         }
         
         return query;
+    }
+
+    async processAllTransactions(transactions) {
+        const autoscanResults = document.getElementById('autoscanResults');
+        const autoscanStatus = document.getElementById('autoscanStatus');
+        
+        let html = '<div style="color: #d1d5db; font-size: 13px; margin-bottom: 8px;">Processing Results:</div>';
+        autoscanResults.innerHTML = html;
+        
+        let totalProcessed = 0;
+        let totalFound = 0;
+        
+        for (let i = 0; i < transactions.length; i++) {
+            const transaction = transactions[i];
+            
+            // Update status
+            autoscanStatus.textContent = `Processing ${i + 1}/${transactions.length}: ${transaction.vendor}`;
+            
+            try {
+                // Search Gmail for this transaction
+                const query = this.buildTransactionSearchQuery(transaction);
+                console.log(`Searching for: ${query}`);
+                
+                const emails = await this.gmailClient.searchEmails(query, 5);
+                
+                // Update results display
+                const confidence = Math.round(transaction.confidence * 100);
+                let resultHtml = `
+                    <div style="background: #1f2937; border: 1px solid #374151; border-radius: 4px; padding: 8px; margin-bottom: 6px;">
+                        <div style="color: #f3f4f6; font-weight: 500;">${transaction.vendor}</div>
+                        <div style="color: #9ca3af; font-size: 12px;">
+                            ${transaction.amount} ${transaction.date ? '• ' + transaction.date : ''} • ${confidence}% confidence
+                        </div>
+                `;
+                
+                if (emails && emails.length > 0) {
+                    totalFound++;
+                    resultHtml += `
+                        <div style="color: #10b981; font-size: 12px; margin-top: 4px;">
+                            ✅ Found ${emails.length} email(s) - Processing...
+                        </div>
+                    `;
+                    
+                    // Process each found email
+                    for (const email of emails.slice(0, 2)) { // Limit to 2 emails max
+                        try {
+                            await this.convertEmailToPDF(email);
+                        } catch (error) {
+                            console.error('Error converting email:', error);
+                        }
+                    }
+                } else {
+                    resultHtml += `
+                        <div style="color: #ef4444; font-size: 12px; margin-top: 4px;">
+                            ❌ No matching emails found
+                        </div>
+                    `;
+                }
+                
+                resultHtml += '</div>';
+                html += resultHtml;
+                autoscanResults.innerHTML = html;
+                
+                totalProcessed++;
+                
+            } catch (error) {
+                console.error(`Error processing transaction ${transaction.vendor}:`, error);
+                
+                html += `
+                    <div style="background: #1f2937; border: 1px solid #374151; border-radius: 4px; padding: 8px; margin-bottom: 6px;">
+                        <div style="color: #f3f4f6; font-weight: 500;">${transaction.vendor}</div>
+                        <div style="color: #ef4444; font-size: 12px; margin-top: 4px;">
+                            ❌ Error: ${error.message}
+                        </div>
+                    </div>
+                `;
+                autoscanResults.innerHTML = html;
+            }
+            
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        // Final status
+        autoscanStatus.textContent = `Complete: Found receipts for ${totalFound}/${totalProcessed} transactions`;
     }
 }
 
