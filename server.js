@@ -2328,12 +2328,22 @@ app.post('/extract-transactions', async (req, res) => {
         }
 
         const client = new vision.ImageAnnotatorClient(clientConfig);
+        console.log('Vision client created successfully');
         
         // Extract text from image
+        console.log('Processing image data...');
+        console.log('Image data length:', imageData.length);
+        console.log('Image data type:', typeof imageData);
+        console.log('Image data starts with:', imageData.substring(0, 50));
+        
         const imageBuffer = Buffer.from(imageData.replace(/^data:image\/[a-z]+;base64,/, ''), 'base64');
+        console.log('Image buffer created, size:', imageBuffer.length);
+        
+        console.log('Calling Google Vision API...');
         const [result] = await client.textDetection({
             image: { content: imageBuffer }
         });
+        console.log('Vision API call successful');
 
         if (!result.textAnnotations || result.textAnnotations.length === 0) {
             return res.json({
