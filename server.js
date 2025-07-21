@@ -2532,31 +2532,43 @@ function calculateConfidence(vendor, amount, dateMatch) {
 // Forward email to Airbase inbox via Gmail
 app.post('/forward-to-airbase', async (req, res) => {
     try {
+        console.log('=== FORWARD TO AIRBASE REQUEST ===');
+        console.log('Request body:', req.body);
+        
         if (!req.session.googleTokens) {
+            console.log('No Google tokens in session');
             return res.status(401).json({ error: 'Not authenticated with Google' });
         }
 
         const { emailId } = req.body;
         
         if (!emailId) {
+            console.log('No email ID provided');
             return res.status(400).json({ error: 'Email ID required' });
         }
+
+        console.log('Forwarding email ID:', emailId);
 
         // Set credentials
         oauth2Client.setCredentials(req.session.googleTokens);
         const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+        console.log('Gmail client configured');
 
         // Get the original email
+        console.log('Fetching original email...');
         const messageDetails = await gmail.users.messages.get({
             userId: 'me',
             id: emailId,
             format: 'raw'
         });
+        console.log('Email fetched successfully');
 
         // Get the raw email content
         const rawEmail = messageDetails.data.raw;
         const emailBuffer = Buffer.from(rawEmail, 'base64');
         const emailContent = emailBuffer.toString();
+        console.log('Email content length:', emailContent.length);
+        console.log('Email preview:', emailContent.substring(0, 200) + '...');
 
         // Parse the email to modify headers
         const lines = emailContent.split('\n');
@@ -2595,11 +2607,15 @@ app.post('/forward-to-airbase', async (req, res) => {
         }
 
         const modifiedEmail = newLines.join('\n');
+        console.log('Modified email length:', modifiedEmail.length);
+        console.log('Modified email preview:', modifiedEmail.substring(0, 300) + '...');
+        
         const encodedEmail = Buffer.from(modifiedEmail).toString('base64')
             .replace(/\+/g, '-')
             .replace(/\//g, '_')
             .replace(/=+$/, '');
 
+        console.log('Sending email to Gmail API...');
         // Send the modified email
         const result = await gmail.users.messages.send({
             userId: 'me',
@@ -2608,7 +2624,9 @@ app.post('/forward-to-airbase', async (req, res) => {
             }
         });
 
-        console.log('Email forwarded to Airbase:', result.data.id);
+        console.log('Email forwarded to Airbase successfully!');
+        console.log('Message ID:', result.data.id);
+        console.log('Thread ID:', result.data.threadId);
         
         res.json({
             success: true,
