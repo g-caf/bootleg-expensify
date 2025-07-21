@@ -1880,18 +1880,53 @@ class ExpenseGadget {
                     totalFound++;
                     resultHtml += `
                         <div style="color: #10b981; font-size: 12px; margin-top: 4px;">
-                            ✅ Found ${emails.length} email(s) - Processing...
+                            ✅ Found ${emails.length} email(s) - Converting to PDF...
                         </div>
                     `;
                     
+                    // Update display first
+                    html += resultHtml + '</div>';
+                    autoscanResults.innerHTML = html;
+                    
                     // Process each found email
-                    for (const email of emails.slice(0, 2)) { // Limit to 2 emails max
+                    for (const email of emails.slice(0, 1)) { // Limit to 1 email per transaction
                         try {
-                            await this.convertEmailToPDF(email);
+                            console.log('Converting email to PDF:', email.id);
+                            
+                            // Update status to show conversion in progress
+                            const currentDiv = autoscanResults.lastElementChild;
+                            const statusDiv = currentDiv.querySelector('[style*="color: #10b981"]');
+                            if (statusDiv) {
+                                statusDiv.innerHTML = `✅ Found ${emails.length} email(s) - Converting "${email.subject?.substring(0, 30)}..."`;
+                            }
+                            
+                            // Create a fake button element for the conversion method
+                            const fakeButton = document.createElement('button');
+                            
+                            await this.convertEmailToPdf(email.id, fakeButton);
+                            
+                            // Update to show success
+                            if (statusDiv) {
+                                statusDiv.innerHTML = `✅ PDF created and uploaded to Drive!`;
+                                statusDiv.style.color = '#10b981';
+                            }
+                            
+                            console.log('Successfully converted email:', email.id);
                         } catch (error) {
-                            console.error('Error converting email:', error);
+                            console.error('Error converting email:', email.id, error);
+                            
+                            // Update to show error
+                            const currentDiv = autoscanResults.lastElementChild;
+                            const statusDiv = currentDiv.querySelector('[style*="color: #10b981"]');
+                            if (statusDiv) {
+                                statusDiv.innerHTML = `❌ Error converting: ${error.message}`;
+                                statusDiv.style.color = '#ef4444';
+                            }
                         }
                     }
+                    
+                    // Don't add the closing div here since we already added it above
+                    continue;
                 } else {
                     resultHtml += `
                         <div style="color: #ef4444; font-size: 12px; margin-top: 4px;">
