@@ -9,6 +9,7 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const validator = require('validator');
+const vision = require('@google-cloud/vision');
 
 
 
@@ -2288,6 +2289,48 @@ app.get('/debug/email-headers/:messageId', requireDebugAuth, async (req, res) =>
 const criticalEnvVars = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'PDFSHIFT_API_KEY'];
 const missingCriticalVars = criticalEnvVars.filter(envVar => !process.env[envVar]);
 const missingSessionSecret = !process.env.SESSION_SECRET;
+
+// Experimental Vision API endpoint for testing
+app.post('/vision-test', async (req, res) => {
+    try {
+        // Initialize Vision client - use environment variables in production, JSON file locally
+        let clientConfig;
+        
+        if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+            // Production: use environment variable
+            const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+            clientConfig = {
+                projectId: credentials.project_id,
+                credentials: credentials
+            };
+        } else {
+            // Local development: use JSON file
+            clientConfig = {
+                projectId: 'sourcegraph-dev',
+                keyFilename: './sourcegraph-dev-0fb0280dc0e5.json'
+            };
+        }
+        
+        const client = new vision.ImageAnnotatorClient(clientConfig);
+        console.log('Vision API test endpoint called');
+        
+        // For now, just test that we can connect to Vision API
+        res.json({
+            success: true,
+            message: 'Vision API client initialized successfully',
+            projectId: clientConfig.projectId,
+            timestamp: new Date().toISOString(),
+            environment: process.env.GOOGLE_SERVICE_ACCOUNT_JSON ? 'production' : 'development'
+        });
+        
+    } catch (error) {
+        console.error('Vision API test error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
 
 if (missingCriticalVars.length > 0) {
     console.error('❌ Missing critical environment variables:', missingCriticalVars.join(', '));

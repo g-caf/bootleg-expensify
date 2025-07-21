@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.local
+*.log
+.DS_Store
+
+# Google Cloud credentials - NEVER commit these!
+sourcegraph-dev-0fb0280dc0e5.json
+google-credentials.json
+**/google-credentials*.json
