@@ -1746,8 +1746,8 @@ class ExpenseGadget {
                     <div style="color: #9ca3af; font-size: 12px;">
                         ${transaction.amount} ${transaction.date ? '• ' + transaction.date : ''} • ${confidence}% confidence
                     </div>
-                    <button class="process-btn" style="margin-top: 4px; font-size: 11px; padding: 4px 8px;" 
-                            onclick="window.expenseGadget.searchForTransaction(${index})">
+                    <button class="process-btn find-receipt-btn" style="margin-top: 4px; font-size: 11px; padding: 4px 8px;" 
+                            data-transaction-index="${index}">
                         Find Receipt
                     </button>
                 </div>
@@ -1758,6 +1758,15 @@ class ExpenseGadget {
         
         // Store transactions for searching
         this.extractedTransactions = transactions;
+        
+        // Add event listeners for Find Receipt buttons
+        const findButtons = autoscanResults.querySelectorAll('.find-receipt-btn');
+        findButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const index = parseInt(e.target.getAttribute('data-transaction-index'));
+                this.searchForTransaction(index);
+            });
+        });
     }
 
     async searchForTransaction(index) {
