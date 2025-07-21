@@ -1885,7 +1885,8 @@ app.get('/auth/google', (req, res) => {
         access_type: 'offline',
         scope: [
             'https://www.googleapis.com/auth/drive.file',
-            'https://www.googleapis.com/auth/gmail.readonly'
+            'https://www.googleapis.com/auth/gmail.readonly',
+            'https://www.googleapis.com/auth/gmail.send'
         ],
         prompt: 'consent'
     });
