@@ -683,50 +683,13 @@
             <button class="scan-btn" id="gmailScanBtn" disabled>Connect to Google</button>
         </div>
         
-        <!-- Date range slider (initially hidden) -->
-        <div class="date-range-container" id="dateRangeContainer" style="display: none;">
-            <div class="range-header">
-                <label>Scan from:</label>
-                <span id="dayDisplay">today to 7 days ago</span>
-            </div>
-            
-            <!-- Dual-handle range slider -->
-            <div class="dual-range-container">
-                <div class="dual-range-track"></div>
-                <div class="dual-range-progress" id="rangeProgress"></div>
-                <!-- Tick marks for business periods (visually evenly distributed) -->
-                <div class="tick-marks">
-                    <div class="tick-mark" style="left: 25%;" title="Month-to-date"></div>
-                    <div class="tick-mark" style="left: 50%;" title="Last month"></div>
-                    <div class="tick-mark" style="left: 75%;" title="Quarter-to-date"></div>
-                </div>
-                <input type="range" id="dayRangeMin" min="0" max="100" value="0" class="dual-range-input">
-                <input type="range" id="dayRangeMax" min="0" max="100" value="20" class="dual-range-input">
-            </div>
-            
-            <div class="range-labels">
-                <span>Today</span>
-                <span class="tick-label" style="left: 25%;">MTD</span>
-                <span class="tick-label" style="left: 50%;">Last Month</span>
-                <span class="tick-label" style="left: 75%;">QTD</span>
-                <span>Last Quarter</span>
-            </div>
-        </div>
-        
-        <!-- Scan results area as direct child -->
-        <div class="scan-results-area" id="scanResultsArea" style="display: none;">
-            <div class="scan-results-text" id="scanResultsText"></div>
-        </div>
-        
-        <!-- Search results as direct child -->
-        <div class="search-results" id="searchResults"></div>
-        
-        <!-- Autoscan Section -->
-        <div class="autoscan-section" id="autoscanSection" style="display: none;">
+        <!-- Autoscan interface (initially hidden) -->
+        <div class="date-range-container" id="autoscanContainer" style="display: none;">
             <div class="range-header">
                 <label>Autoscan:</label>
-                <span id="autoscanStatus">Ready</span>
+                <span id="autoscanStatus">Drop Airbase screenshot</span>
             </div>
+            
             <div class="paste-area" id="pasteArea">
                 <div class="paste-placeholder" id="pastePlaceholder">
                     📋 Drop Airbase screenshot here or Ctrl+V to paste
@@ -739,8 +702,15 @@
                     </div>
                 </div>
             </div>
-            <div class="autoscan-results" id="autoscanResults" style="display: none;"></div>
         </div>
+        
+        <!-- Scan results area as direct child -->
+        <div class="scan-results-area" id="scanResultsArea" style="display: none;">
+            <div class="scan-results-text" id="scanResultsText"></div>
+        </div>
+        
+        <!-- Search results as direct child -->
+        <div class="search-results" id="searchResults"></div>
     </div>
     
 

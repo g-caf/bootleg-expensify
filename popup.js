@@ -600,14 +600,10 @@ class ExpenseGadget {
                 console.log('Connecting to Google...');
                 // Handle connection
                 await this.connectGoogleDrive();
-            } else if (gmailScanBtn.textContent === 'Scan Gmail') {
-                console.log('Showing date range slider...');
-                // Show date range slider and change button to "Start Scanning"
-                this.showDateRangeSlider();
-            } else if (gmailScanBtn.textContent === 'Start Scanning') {
-                console.log('Starting Gmail scan...');
-                // Execute the scan
-                await this.scanGmail();
+            } else if (gmailScanBtn.textContent === 'Autoscan') {
+                console.log('Showing autoscan interface...');
+                // Show autoscan interface
+                this.showAutoscanInterface();
             } else {
                 console.log('Unknown button state:', gmailScanBtn.textContent);
             }
@@ -874,10 +870,10 @@ class ExpenseGadget {
         const gmailScanBtn = document.getElementById('gmailScanBtn');
         if (gmailScanBtn) {
             if (isAuthenticated) {
-                gmailScanBtn.textContent = 'Scan Gmail';
+                gmailScanBtn.textContent = 'Autoscan';
                 gmailScanBtn.className = 'scan-btn';
                 gmailScanBtn.disabled = false;
-                console.log('Set button to authenticated state: "Scan Gmail"');
+                console.log('Set button to authenticated state: "Autoscan"');
             } else {
                 gmailScanBtn.textContent = 'Connect to Google';
                 gmailScanBtn.className = 'scan-btn connect';
@@ -888,16 +884,10 @@ class ExpenseGadget {
             console.error('Gmail scan button not found!');
         }
 
-        // Show/hide autoscan section based on authentication
-        const autoscanSection = document.getElementById('autoscanSection');
-        if (autoscanSection) {
-            autoscanSection.style.display = isAuthenticated ? 'block' : 'none';
-            
-            // Initialize autoscan functionality when authenticated
-            if (isAuthenticated && !this.autoscanInitialized) {
-                this.initializeAutoscan();
-                this.autoscanInitialized = true;
-            }
+        // Initialize autoscan functionality when authenticated
+        if (isAuthenticated && !this.autoscanInitialized) {
+            this.initializeAutoscan();
+            this.autoscanInitialized = true;
         }
     }
 
@@ -1579,21 +1569,18 @@ class ExpenseGadget {
         }
     }
 
-    // Autoscan functionality
-    initializeAutoscan() {
-        const pasteArea = document.getElementById('pasteArea');
-        const pastePlaceholder = document.getElementById('pastePlaceholder');
-        const pastePreview = document.getElementById('pastePreview');
-        const previewImage = document.getElementById('previewImage');
-        const processBtn = document.getElementById('processBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const autoscanSection = document.getElementById('autoscanSection');
-        const autoscanStatus = document.getElementById('autoscanStatus');
+    showAutoscanInterface() {
+        // Show the autoscan container
+        const autoscanContainer = document.getElementById('autoscanContainer');
+        autoscanContainer.style.display = 'block';
+        
+        // Hide search results
+        this.hideSearchResults();
+        this.hideScanResults();
+    }
 
-        // Show autoscan section when authenticated
-        if (this.gmailClient && this.gmailClient.isAuthenticated) {
-            autoscanSection.style.display = 'block';
-        }
+    // Autoscan functionality  
+    initializeAutoscan() {
 
         // Handle paste events
         document.addEventListener('paste', (e) => {
@@ -1844,17 +1831,17 @@ class ExpenseGadget {
     }
 
     async processAllTransactions(transactions) {
-        const autoscanResults = document.getElementById('autoscanResults');
+        const scanResultsArea = document.getElementById('scanResultsArea');
+        const scanResultsText = document.getElementById('scanResultsText');
         const autoscanStatus = document.getElementById('autoscanStatus');
         
-        // Simple progress display
-        autoscanResults.innerHTML = `
-            <div style="color: #d1d5db; font-size: 13px; text-align: center; padding: 20px;">
-                <div style="margin-bottom: 10px;">🔍 Searching Gmail and converting receipts...</div>
-                <div id="progressText" style="color: #9ca3af; font-size: 12px;">Starting...</div>
-            </div>
-        `;
-        autoscanResults.style.display = 'block';
+        // Show scan results area with progress
+        this.showScanResults(`🔍 Searching Gmail and converting receipts...`);
+        
+        // Add progress text element if it doesn't exist
+        if (!document.getElementById('progressText')) {
+            scanResultsText.innerHTML += '<div id="progressText" style="color: #9ca3af; font-size: 12px; margin-top: 8px;">Starting...</div>';
+        }
         
         let totalProcessed = 0;
         let totalFound = 0;
@@ -1862,20 +1849,22 @@ class ExpenseGadget {
         
         // Process all transactions in background
         this.processTransactionsInBackground(transactions, autoscanStatus).then(results => {
-            // Final summary
-            autoscanStatus.textContent = `Complete: Found ${results.found}/${results.total} receipts, converted ${results.converted} PDFs`;
+            // Final summary in scan results format
+            this.showScanResults(`📄 Processing complete: ${results.converted} PDFs created and uploaded to Drive`);
+            autoscanStatus.textContent = `Complete: ${results.found}/${results.total} receipts found`;
             
             const progressText = document.getElementById('progressText');
             if (progressText) {
                 progressText.innerHTML = `
-                    ✅ <strong>${results.converted} PDFs</strong> created and uploaded to Drive<br>
-                    📧 <strong>${results.found} emails</strong> found out of <strong>${results.total} transactions</strong>
+                    📧 <strong>${results.found} emails</strong> found out of <strong>${results.total} transactions</strong><br>
+                    ✅ <strong>${results.converted} PDFs</strong> successfully uploaded to Google Drive
                 `;
                 progressText.style.color = '#10b981';
             }
         }).catch(error => {
             console.error('Background processing error:', error);
-            autoscanStatus.textContent = 'Error during processing';
+            this.showScanResults('❌ Error during processing');
+            autoscanStatus.textContent = 'Error occurred';
         });
     }
 
