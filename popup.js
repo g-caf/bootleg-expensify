@@ -1814,8 +1814,15 @@ class ExpenseGadget {
             vendor = vendor.replace(/[*]/g, ''); // Remove asterisks
         }
         
-        // Build search query - just vendor name, no amount (too restrictive)
+        // Build search query with vendor and amount
         let query = vendor;
+        
+        // Add amount in multiple formats to increase match probability
+        if (transaction.amount) {
+            const amount = transaction.amount.replace('$', '').trim();
+            // Search for amount in common email formats: $48.27, 48.27, $48, etc.
+            query += ` ("$${amount}" OR "${amount}" OR "$${amount.split('.')[0]}")`;
+        }
         
         // Add date range if available
         if (transaction.date) {
