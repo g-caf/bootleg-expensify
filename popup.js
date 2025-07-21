@@ -1700,8 +1700,22 @@ class ExpenseGadget {
             // Display extracted transactions
             this.displayExtractedTransactions(result.transactions);
             
+            // Show debug info
+            console.log('Vision API Raw Text:', result.rawText);
+            console.log('Detected blocks:', result.detectedBlocks);
+            console.log('Parsed transactions:', result.transactions);
+            
             // Update status
             autoscanStatus.textContent = `Found ${result.transactions.length} transactions`;
+            
+            // Show debug text in results for now
+            const debugHtml = `
+                <div style="color: #9ca3af; font-size: 11px; margin-bottom: 8px; max-height: 150px; overflow-y: auto; background: #1f2937; padding: 8px; border-radius: 4px;">
+                    <strong>Debug - Raw detected text:</strong><br>
+                    <pre style="white-space: pre-wrap; font-size: 10px;">${result.rawText}</pre>
+                </div>
+            `;
+            autoscanResults.innerHTML = debugHtml + (autoscanResults.innerHTML || '');
             autoscanResults.style.display = 'block';
 
         } catch (error) {
