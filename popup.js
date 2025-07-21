@@ -441,12 +441,21 @@ class ExpenseGadget {
         };
         
         // Helper function to convert days to business period names
-        const daysToBusinessPeriod = (days) => {
+        const daysToBusinessPeriod = (days, sliderPosition = null) => {
             const { mtdDays, lastMonthDays, qtdDays, lastQuarterDays } = getBusinessPeriodDays();
             
-            console.log(`Global daysToBusinessPeriod: input=${days}, mtd=${mtdDays}, lastMonth=${lastMonthDays}, qtd=${qtdDays}, lastQuarter=${lastQuarterDays}`);
+            console.log(`Global daysToBusinessPeriod: input=${days}, sliderPos=${sliderPosition}, mtd=${mtdDays}, lastMonth=${lastMonthDays}, qtd=${qtdDays}, lastQuarter=${lastQuarterDays}`);
             
             if (days === 0) return 'today';
+            
+            // When MTD and QTD are the same (first month of quarter), use slider position to determine intent
+            if (mtdDays === qtdDays && sliderPosition !== null) {
+                if (Math.abs(sliderPosition - 75) <= 5) { // Within 5% of QTD position
+                    return 'quarter-to-date';
+                } else if (Math.abs(sliderPosition - 25) <= 5) { // Within 5% of MTD position
+                    return 'month-to-date';
+                }
+            }
             
             // Use exact matching with consistent tolerance
             const tolerance = 1;
@@ -564,8 +573,8 @@ class ExpenseGadget {
             const finalMaxDays = sliderPositionToDays(finalMaxPos);
 
             // Update display text with business period names
-            const fromText = daysToBusinessPeriod(finalMinDays);
-            const toText = daysToBusinessPeriod(finalMaxDays);
+            const fromText = daysToBusinessPeriod(finalMinDays, finalMinPos);
+            const toText = daysToBusinessPeriod(finalMaxDays, finalMaxPos);
             dayDisplay.textContent = `${fromText} to ${toText}`;
 
             // Update progress bar (use slider positions for visual consistency)
