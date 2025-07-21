@@ -1678,6 +1678,10 @@ class ExpenseGadget {
             pastePlaceholder.style.display = 'none';
             pastePreview.style.display = 'block';
             
+            // Show buttons outside the paste area
+            const pasteButtons = document.getElementById('pasteButtons');
+            pasteButtons.style.display = 'flex';
+            
             // Store image data for processing
             this.currentImageData = e.target.result;
         };
@@ -1687,9 +1691,11 @@ class ExpenseGadget {
     clearPastedImage() {
         const pastePlaceholder = document.getElementById('pastePlaceholder');
         const pastePreview = document.getElementById('pastePreview');
+        const pasteButtons = document.getElementById('pasteButtons');
         
         pastePlaceholder.style.display = 'block';
         pastePreview.style.display = 'none';
+        pasteButtons.style.display = 'none';
         this.currentImageData = null;
     }
 

@@ -2361,12 +2361,17 @@ app.post('/extract-transactions', async (req, res) => {
         const transactions = parseAirbaseTransactions(result.textAnnotations);
         console.log('Transactions parsed successfully, count:', transactions.length);
         
-        res.json({
+        console.log('Building response...');
+        const response = {
             success: true,
             transactions: transactions,
             rawText: result.textAnnotations[0]?.description, // Full text for debugging
             detectedBlocks: result.textAnnotations.length
-        });
+        };
+        
+        console.log('Response built, sending...');
+        res.json(response);
+        console.log('Response sent successfully');
 
     } catch (error) {
         console.error('Transaction extraction error:', error);
