@@ -1847,120 +1847,93 @@ class ExpenseGadget {
         const autoscanResults = document.getElementById('autoscanResults');
         const autoscanStatus = document.getElementById('autoscanStatus');
         
-        let html = '<div style="color: #d1d5db; font-size: 13px; margin-bottom: 8px;">Processing Results:</div>';
-        autoscanResults.innerHTML = html;
+        // Simple progress display
+        autoscanResults.innerHTML = `
+            <div style="color: #d1d5db; font-size: 13px; text-align: center; padding: 20px;">
+                <div style="margin-bottom: 10px;">🔍 Searching Gmail and converting receipts...</div>
+                <div id="progressText" style="color: #9ca3af; font-size: 12px;">Starting...</div>
+            </div>
+        `;
+        autoscanResults.style.display = 'block';
         
         let totalProcessed = 0;
         let totalFound = 0;
+        let totalConverted = 0;
+        
+        // Process all transactions in background
+        this.processTransactionsInBackground(transactions, autoscanStatus).then(results => {
+            // Final summary
+            autoscanStatus.textContent = `Complete: Found ${results.found}/${results.total} receipts, converted ${results.converted} PDFs`;
+            
+            const progressText = document.getElementById('progressText');
+            if (progressText) {
+                progressText.innerHTML = `
+                    ✅ <strong>${results.converted} PDFs</strong> created and uploaded to Drive<br>
+                    📧 <strong>${results.found} emails</strong> found out of <strong>${results.total} transactions</strong>
+                `;
+                progressText.style.color = '#10b981';
+            }
+        }).catch(error => {
+            console.error('Background processing error:', error);
+            autoscanStatus.textContent = 'Error during processing';
+        });
+    }
+
+    async processTransactionsInBackground(transactions, autoscanStatus) {
+        let totalFound = 0;
+        let totalConverted = 0;
         
         for (let i = 0; i < transactions.length; i++) {
             const transaction = transactions[i];
             
-            // Update status
-            autoscanStatus.textContent = `Processing ${i + 1}/${transactions.length}: ${transaction.vendor}`;
+            // Update simple progress
+            autoscanStatus.textContent = `Processing ${i + 1}/${transactions.length} transactions...`;
+            
+            const progressText = document.getElementById('progressText');
+            if (progressText) {
+                progressText.textContent = `Searching for ${transaction.vendor.split(' ')[0]} receipts...`;
+            }
             
             try {
                 // Search Gmail for this transaction
                 const query = this.buildTransactionSearchQuery(transaction);
                 console.log(`Searching for: ${query}`);
                 
-                const emails = await this.gmailClient.searchEmails(query, 5);
-                
-                // Update results display
-                const confidence = Math.round(transaction.confidence * 100);
-                let resultHtml = `
-                    <div style="background: #1f2937; border: 1px solid #374151; border-radius: 4px; padding: 8px; margin-bottom: 6px;">
-                        <div style="color: #f3f4f6; font-weight: 500;">${transaction.vendor}</div>
-                        <div style="color: #9ca3af; font-size: 12px;">
-                            ${transaction.amount} ${transaction.date ? '• ' + transaction.date : ''} • ${confidence}% confidence
-                        </div>
-                `;
+                const emails = await this.gmailClient.searchEmails(query, 3);
                 
                 if (emails && emails.length > 0) {
                     totalFound++;
-                    resultHtml += `
-                        <div style="color: #10b981; font-size: 12px; margin-top: 4px;">
-                            ✅ Found ${emails.length} email(s) - Converting to PDF...
-                        </div>
-                    `;
                     
-                    // Update display first
-                    html += resultHtml + '</div>';
-                    autoscanResults.innerHTML = html;
-                    
-                    // Process each found email
-                    for (const email of emails.slice(0, 1)) { // Limit to 1 email per transaction
-                        try {
-                            console.log('Converting email to PDF:', email.id);
-                            
-                            // Update status to show conversion in progress
-                            const currentDiv = autoscanResults.lastElementChild;
-                            const statusDiv = currentDiv.querySelector('[style*="color: #10b981"]');
-                            if (statusDiv) {
-                                statusDiv.innerHTML = `✅ Found ${emails.length} email(s) - Converting "${email.subject?.substring(0, 30)}..."`;
-                            }
-                            
-                            // Create a fake button element for the conversion method
-                            const fakeButton = document.createElement('button');
-                            
-                            await this.convertEmailToPdf(email.id, fakeButton);
-                            
-                            // Update to show success
-                            if (statusDiv) {
-                                statusDiv.innerHTML = `✅ PDF created and uploaded to Drive!`;
-                                statusDiv.style.color = '#10b981';
-                            }
-                            
-                            console.log('Successfully converted email:', email.id);
-                        } catch (error) {
-                            console.error('Error converting email:', email.id, error);
-                            
-                            // Update to show error
-                            const currentDiv = autoscanResults.lastElementChild;
-                            const statusDiv = currentDiv.querySelector('[style*="color: #10b981"]');
-                            if (statusDiv) {
-                                statusDiv.innerHTML = `❌ Error converting: ${error.message}`;
-                                statusDiv.style.color = '#ef4444';
-                            }
+                    // Process first email only
+                    const email = emails[0];
+                    try {
+                        if (progressText) {
+                            progressText.textContent = `Converting ${transaction.vendor.split(' ')[0]} receipt to PDF...`;
                         }
+                        
+                        const fakeButton = document.createElement('button');
+                        await this.convertEmailToPdf(email.id, fakeButton);
+                        totalConverted++;
+                        
+                        console.log(`✅ Converted: ${transaction.vendor}`);
+                    } catch (error) {
+                        console.error(`❌ Conversion failed for ${transaction.vendor}:`, error);
                     }
-                    
-                    // Don't add the closing div here since we already added it above
-                    continue;
-                } else {
-                    resultHtml += `
-                        <div style="color: #ef4444; font-size: 12px; margin-top: 4px;">
-                            ❌ No matching emails found
-                        </div>
-                    `;
                 }
-                
-                resultHtml += '</div>';
-                html += resultHtml;
-                autoscanResults.innerHTML = html;
-                
-                totalProcessed++;
                 
             } catch (error) {
                 console.error(`Error processing transaction ${transaction.vendor}:`, error);
-                
-                html += `
-                    <div style="background: #1f2937; border: 1px solid #374151; border-radius: 4px; padding: 8px; margin-bottom: 6px;">
-                        <div style="color: #f3f4f6; font-weight: 500;">${transaction.vendor}</div>
-                        <div style="color: #ef4444; font-size: 12px; margin-top: 4px;">
-                            ❌ Error: ${error.message}
-                        </div>
-                    </div>
-                `;
-                autoscanResults.innerHTML = html;
             }
             
             // Small delay to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
         
-        // Final status
-        autoscanStatus.textContent = `Complete: Found receipts for ${totalFound}/${totalProcessed} transactions`;
+        return {
+            total: transactions.length,
+            found: totalFound,
+            converted: totalConverted
+        };
     }
 }
 
