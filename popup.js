@@ -1919,9 +1919,17 @@ class ExpenseGadget {
             try {
                 // Search Gmail for this transaction
                 const query = this.buildTransactionSearchQuery(transaction);
-                console.log(`Searching for: ${query}`);
+                console.log(`🔍 Searching for transaction: ${transaction.vendor} - ${transaction.amount}`);
+                console.log(`📧 Search query: ${query}`);
                 
-                const emails = await this.gmailClient.searchEmails(query, 3);
+                let emails;
+                try {
+                    emails = await this.gmailClient.searchEmails(query, 3);
+                    console.log(`📬 Search result: ${emails ? emails.length : 0} emails found`);
+                } catch (searchError) {
+                    console.error(`❌ Gmail search error for ${transaction.vendor}:`, searchError);
+                    continue; // Skip this transaction and continue with next
+                }
                 
                 if (emails && emails.length > 0) {
                     totalFound++;
