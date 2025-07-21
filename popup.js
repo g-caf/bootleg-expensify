@@ -1366,9 +1366,9 @@ class ExpenseGadget {
             console.error('Search error:', error);
             
             // Check if authentication expired
-            if (error.message.includes('Authentication expired')) {
+            if (error.message.includes('Authentication expired') || error.message.includes('401')) {
                 // Update UI to show disconnected state
-                this.updateUI(false);
+                this.updateGmailAuthStatus(false);
                 searchResults.innerHTML = '<div style="color: #dc2626; text-align: center; padding: 20px;">🔐 Authentication expired. Please reconnect to Google.</div>';
             } else {
                 searchResults.innerHTML = `<div style="color: #dc2626; text-align: center; padding: 20px;">❌ Search failed: ${error.message}</div>`;
@@ -1928,6 +1928,22 @@ class ExpenseGadget {
                     console.log(`📬 Search result: ${emails ? emails.length : 0} emails found`);
                 } catch (searchError) {
                     console.error(`❌ Gmail search error for ${transaction.vendor}:`, searchError);
+                    
+                    // Check if this is a 401 authentication error
+                    if (searchError.message && searchError.message.includes('401')) {
+                        console.log('🔑 Authentication expired - stopping autoscan and updating UI');
+                        // Update the autoscan status to indicate auth issue
+                        autoscanStatus.textContent = 'Authentication expired - please reconnect';
+                        
+                        // The Gmail client should have already updated the UI to show "Connect to Google"
+                        // Stop processing and return early
+                        return {
+                            total: transactions.length,
+                            found: 0,
+                            converted: 0
+                        };
+                    }
+                    
                     continue; // Skip this transaction and continue with next
                 }
                 
