@@ -1519,7 +1519,18 @@ class ExpenseGadget {
             console.log('Conversion result:', result);
 
             if (result.success) {
-                buttonElement.textContent = '✅ Done';
+                // Send to Airbase inbox if we have the PDF data
+                if (result.pdfBase64) {
+                    try {
+                        await this.sendToAirbaseInbox(result.pdfBase64, result.filename, result.vendor, result.amount, result.receiptDate);
+                        buttonElement.textContent = '✅ Sent to Airbase';
+                    } catch (airbaseError) {
+                        console.error('Failed to send to Airbase:', airbaseError);
+                        buttonElement.textContent = '✅ PDF Ready';
+                    }
+                } else {
+                    buttonElement.textContent = '✅ Done';
+                }
                 buttonElement.style.background = '#10b981';
                 // No overlay message - just button state change
             } else {
@@ -1541,6 +1552,37 @@ class ExpenseGadget {
                 buttonElement.style.background = '#f44e40';
             }
         }, 3000);
+    }
+
+    async sendToAirbaseInbox(pdfBase64, filename, vendor, amount, receiptDate) {
+        console.log('Sending PDF to Airbase inbox...');
+        
+        const response = await fetch('https://bootleg-expensify.onrender.com/send-to-airbase', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                pdfBase64: pdfBase64,
+                filename: filename,
+                vendor: vendor,
+                amount: amount,
+                receiptDate: receiptDate
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to send to Airbase: ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to send to Airbase');
+        }
+
+        console.log('Successfully sent to Airbase:', result.messageId);
+        return result;
     }
 
     cleanEmailContentForPdf(emailContent) {
@@ -1730,18 +1772,14 @@ class ExpenseGadget {
                 throw new Error(result.error || 'Failed to extract transactions');
             }
 
-            // Display extracted transactions
-            this.displayExtractedTransactions(result.transactions);
-            
-            // Show debug info
+            // Show debug info in console only
             console.log('Vision API Raw Text:', result.rawText);
             console.log('Detected blocks:', result.detectedBlocks);
             console.log('Parsed transactions:', result.transactions);
             
-            // Update status and start automated processing
+            // Start automated processing immediately (no UI display of individual transactions)
             if (result.transactions.length > 0) {
                 autoscanStatus.textContent = `Processing ${result.transactions.length} transactions...`;
-                autoscanResults.style.display = 'block';
                 
                 // Automatically process all transactions
                 await this.processAllTransactions(result.transactions);

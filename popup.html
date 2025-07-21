@@ -85,7 +85,6 @@
         padding: 4px 16px 4px 16px; /* Match bottom padding to top padding */
         overflow: hidden;
         box-sizing: border-box;
-        overflow-y: auto;
         display: flex;
         flex-direction: column;
             gap: 10px; /* Slightly reduced gap for better distribution */
@@ -585,18 +584,18 @@
             background: #374151;
             border: 1px solid #4b5563;
             border-radius: 8px;
-            padding: 12px;
+            padding: 10px;
             margin-top: 8px;
             transition: all 0.3s ease;
-            max-height: 200px;
+            max-height: 180px;
             overflow: visible;
         }
 
         .paste-area {
-            height: 120px;
+            height: 90px;
             border: 2px dashed #6b7280;
             border-radius: 6px;
-            padding: 16px;
+            padding: 12px;
             text-align: center;
             background: #1f2937;
             transition: all 0.3s ease;
@@ -626,7 +625,7 @@
             display: flex;
             gap: 8px;
             justify-content: center;
-            margin-top: 12px;
+            margin-top: 8px;
         }
 
         .process-btn, .clear-btn {
@@ -662,6 +661,8 @@
             background: #1f2937;
             border-radius: 6px;
             border: 1px solid #374151;
+            font-size: 12px;
+            color: #d1d5db;
         }
 
     </style>
@@ -701,7 +702,7 @@
                     📋 Drop Airbase screenshot here or Ctrl+V to paste
                 </div>
                 <div class="paste-preview" id="pastePreview" style="display: none;">
-                    <img id="previewImage" style="max-width: 100%; max-height: 100px; border-radius: 4px;" />
+                    <img id="previewImage" style="max-width: 100%; max-height: 70px; border-radius: 4px;" />
                 </div>
             </div>
             
@@ -710,6 +711,9 @@
                 <button id="processBtn" class="process-btn">Find Receipts</button>
                 <button id="clearBtn" class="clear-btn">Clear</button>
             </div>
+            
+            <!-- Results area for autoscan -->
+            <div class="autoscan-results" id="autoscanResults" style="display: none;"></div>
         </div>
         
         <!-- Scan results area as direct child -->

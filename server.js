@@ -2234,6 +2234,10 @@ app.post('/convert-email-to-pdf', strictLimiter, async (req, res) => {
         res.json({
             success: true,
             filename: outputFilename,
+            vendor: vendor,
+            amount: amount,
+            receiptDate: receiptDate,
+            pdfBase64: pdfBuffer.toString('base64'),
             googleDrive: driveUpload
         });
 
@@ -2524,6 +2528,76 @@ function calculateConfidence(vendor, amount, dateMatch) {
     
     return Math.min(score, 1.0);
 }
+
+// Send PDF receipt to Airbase inbox via Gmail
+app.post('/send-to-airbase', async (req, res) => {
+    try {
+        if (!req.session.googleTokens) {
+            return res.status(401).json({ error: 'Not authenticated with Google' });
+        }
+
+        const { pdfBase64, filename, vendor, amount, receiptDate } = req.body;
+        
+        if (!pdfBase64 || !filename) {
+            return res.status(400).json({ error: 'PDF data and filename required' });
+        }
+
+        // Set credentials
+        oauth2Client.setCredentials(req.session.googleTokens);
+        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+        // Create email with PDF attachment
+        const airbaseEmail = 'adrienne.caffarel-sourcegraph@airbase.com';
+        const subject = `Receipt: ${vendor || 'Unknown'} - ${amount || ''} - ${receiptDate || ''}`.trim();
+        const body = `Automated receipt submission from Expense Gadget\n\nVendor: ${vendor || 'Unknown'}\nAmount: ${amount || 'Unknown'}\nDate: ${receiptDate || 'Unknown'}\nFilename: ${filename}`;
+
+        // Create multipart email with attachment
+        const boundary = '----=_Part_' + Date.now();
+        const rawEmail = [
+            `To: ${airbaseEmail}`,
+            `Subject: ${subject}`,
+            `MIME-Version: 1.0`,
+            `Content-Type: multipart/mixed; boundary="${boundary}"`,
+            '',
+            `--${boundary}`,
+            `Content-Type: text/plain; charset=utf-8`,
+            '',
+            body,
+            '',
+            `--${boundary}`,
+            `Content-Type: application/pdf`,
+            `Content-Disposition: attachment; filename="${filename}"`,
+            `Content-Transfer-Encoding: base64`,
+            '',
+            pdfBase64,
+            '',
+            `--${boundary}--`
+        ].join('\n');
+
+        // Send email
+        const result = await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: {
+                raw: Buffer.from(rawEmail).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+            }
+        });
+
+        console.log('Email sent to Airbase:', result.data.id);
+        
+        res.json({
+            success: true,
+            messageId: result.data.id,
+            recipient: airbaseEmail
+        });
+
+    } catch (error) {
+        console.error('Error sending to Airbase:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
 
 // Experimental Vision API endpoint for testing
 app.post('/vision-test', async (req, res) => {
