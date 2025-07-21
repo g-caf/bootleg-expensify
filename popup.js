@@ -636,12 +636,12 @@ class ExpenseGadget {
             this.hideDateRangeSlider();
         });
 
-        // Event delegation for convert buttons (dynamically created)
+        // Event delegation for action buttons (dynamically created)
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('convert-btn')) {
                 const emailId = e.target.getAttribute('data-email-id');
                 if (emailId) {
-                    this.convertEmailToPdf(emailId, e.target);
+                    this.forwardEmailToAirbase(emailId, e.target);
                 }
             }
         });
@@ -1402,7 +1402,7 @@ class ExpenseGadget {
             html += `</div>`;
             html += `<div class="search-result-right">`;
             html += `<div class="search-result-date">${this.formatDate(date)}</div>`;
-            html += `<button class="convert-btn" data-email-id="${emailId}">Convert to PDF</button>`;
+            html += `<button class="convert-btn" data-email-id="${emailId}">Send to Airbase</button>`;
             html += `</div>`;
             html += `</div>`;
             html += `</div>`;
@@ -1481,33 +1481,24 @@ class ExpenseGadget {
         searchResults.innerHTML = '';
     }
 
-    async convertEmailToPdf(emailId, buttonElement) {
-        console.log('=== CONVERT EMAIL TO PDF ===');
+    async forwardEmailToAirbase(emailId, buttonElement) {
+        console.log('=== FORWARD EMAIL TO AIRBASE ===');
         console.log('Email ID:', emailId);
 
         // Disable button and show loading
         buttonElement.disabled = true;
-        buttonElement.textContent = 'Converting...';
+        buttonElement.textContent = 'Sending...';
 
         try {
-            // Get the full email content from Gmail (including body)
-            const emailContent = await this.gmailClient.getFullMessageContent(emailId);
-            console.log('Got full email content:', emailContent);
-
-            // Clean the email content to remove images and reduce size
-            const cleanedEmailContent = this.cleanEmailContentForPdf(emailContent);
-            console.log('Cleaned email content for PDF conversion');
-
-            // Send to server for PDF conversion
-            const response = await fetch('https://bootleg-expensify.onrender.com/convert-email-to-pdf', {
+            // Forward email directly to Airbase inbox
+            const response = await fetch('https://bootleg-expensify.onrender.com/forward-to-airbase', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 credentials: 'include',
                 body: JSON.stringify({
-                    emailId: emailId,
-                    emailContent: cleanedEmailContent
+                    emailId: emailId
                 })
             });
 
@@ -1516,74 +1507,32 @@ class ExpenseGadget {
             }
 
             const result = await response.json();
-            console.log('Conversion result:', result);
+            console.log('Forward result:', result);
 
             if (result.success) {
-                // Send to Airbase inbox if we have the PDF data
-                if (result.pdfBase64) {
-                    try {
-                        await this.sendToAirbaseInbox(result.pdfBase64, result.filename, result.vendor, result.amount, result.receiptDate);
-                        buttonElement.textContent = '✅ Sent to Airbase';
-                    } catch (airbaseError) {
-                        console.error('Failed to send to Airbase:', airbaseError);
-                        buttonElement.textContent = '✅ PDF Ready';
-                    }
-                } else {
-                    buttonElement.textContent = '✅ Done';
-                }
+                buttonElement.textContent = '✅ Sent to Airbase';
                 buttonElement.style.background = '#10b981';
-                // No overlay message - just button state change
             } else {
-                throw new Error(result.error || 'Conversion failed');
+                throw new Error(result.error || 'Forward failed');
             }
 
         } catch (error) {
-            console.error('Convert error:', error);
+            console.error('Forward error:', error);
             buttonElement.textContent = '❌ Failed';
             buttonElement.style.background = '#dc2626';
-            // No error popup - conversion fails silently
         }
 
         // Re-enable button after a delay
         setTimeout(() => {
             buttonElement.disabled = false;
             if (buttonElement.textContent === '❌ Failed') {
-                buttonElement.textContent = 'Convert to PDF';
+                buttonElement.textContent = 'Send to Airbase';
                 buttonElement.style.background = '#f44e40';
             }
         }, 3000);
     }
 
-    async sendToAirbaseInbox(pdfBase64, filename, vendor, amount, receiptDate) {
-        console.log('Sending PDF to Airbase inbox...');
-        
-        const response = await fetch('https://bootleg-expensify.onrender.com/send-to-airbase', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-                pdfBase64: pdfBase64,
-                filename: filename,
-                vendor: vendor,
-                amount: amount,
-                receiptDate: receiptDate
-            })
-        });
 
-        if (!response.ok) {
-            throw new Error(`Failed to send to Airbase: ${response.status}`);
-        }
-
-        const result = await response.json();
-        if (!result.success) {
-            throw new Error(result.error || 'Failed to send to Airbase');
-        }
-
-        console.log('Successfully sent to Airbase:', result.messageId);
-        return result;
-    }
 
     cleanEmailContentForPdf(emailContent) {
         // Create a copy to avoid modifying the original
@@ -1934,14 +1883,14 @@ class ExpenseGadget {
         // Process all transactions in background
         this.processTransactionsInBackground(transactions, autoscanStatus).then(results => {
             // Final summary in scan results format
-            this.showScanResults(`📄 Processing complete: ${results.converted} PDFs created and uploaded to Drive`);
+            this.showScanResults(`📧 Processing complete: ${results.converted} receipts forwarded to Airbase`);
             autoscanStatus.textContent = `Complete: ${results.found}/${results.total} receipts found`;
             
             const progressText = document.getElementById('progressText');
             if (progressText) {
                 progressText.innerHTML = `
                     📧 <strong>${results.found} emails</strong> found out of <strong>${results.total} transactions</strong><br>
-                    ✅ <strong>${results.converted} PDFs</strong> successfully uploaded to Google Drive
+                    ✅ <strong>${results.converted} receipts</strong> successfully forwarded to Airbase
                 `;
                 progressText.style.color = '#10b981';
             }
@@ -1981,16 +1930,16 @@ class ExpenseGadget {
                     const email = emails[0];
                     try {
                         if (progressText) {
-                            progressText.textContent = `Converting ${transaction.vendor.split(' ')[0]} receipt to PDF...`;
+                            progressText.textContent = `Forwarding ${transaction.vendor.split(' ')[0]} receipt to Airbase...`;
                         }
                         
                         const fakeButton = document.createElement('button');
-                        await this.convertEmailToPdf(email.id, fakeButton);
+                        await this.forwardEmailToAirbase(email.id, fakeButton);
                         totalConverted++;
                         
-                        console.log(`✅ Converted: ${transaction.vendor}`);
+                        console.log(`✅ Forwarded: ${transaction.vendor}`);
                     } catch (error) {
-                        console.error(`❌ Conversion failed for ${transaction.vendor}:`, error);
+                        console.error(`❌ Forward failed for ${transaction.vendor}:`, error);
                     }
                 }
                 

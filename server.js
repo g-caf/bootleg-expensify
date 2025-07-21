@@ -2529,7 +2529,103 @@ function calculateConfidence(vendor, amount, dateMatch) {
     return Math.min(score, 1.0);
 }
 
-// Send PDF receipt to Airbase inbox via Gmail
+// Forward email to Airbase inbox via Gmail
+app.post('/forward-to-airbase', async (req, res) => {
+    try {
+        if (!req.session.googleTokens) {
+            return res.status(401).json({ error: 'Not authenticated with Google' });
+        }
+
+        const { emailId } = req.body;
+        
+        if (!emailId) {
+            return res.status(400).json({ error: 'Email ID required' });
+        }
+
+        // Set credentials
+        oauth2Client.setCredentials(req.session.googleTokens);
+        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+        // Get the original email
+        const messageDetails = await gmail.users.messages.get({
+            userId: 'me',
+            id: emailId,
+            format: 'raw'
+        });
+
+        // Get the raw email content
+        const rawEmail = messageDetails.data.raw;
+        const emailBuffer = Buffer.from(rawEmail, 'base64');
+        const emailContent = emailBuffer.toString();
+
+        // Parse the email to modify headers
+        const lines = emailContent.split('\n');
+        const newLines = [];
+        let inHeaders = true;
+        let foundTo = false;
+
+        for (const line of lines) {
+            if (inHeaders && line.trim() === '') {
+                // End of headers, add our recipient and continue with body
+                if (!foundTo) {
+                    newLines.push('To: adrienne.caffarel-sourcegraph@airbase.com');
+                }
+                newLines.push(''); // Empty line to separate headers from body
+                inHeaders = false;
+                continue;
+            }
+
+            if (inHeaders) {
+                // Modify headers
+                if (line.toLowerCase().startsWith('to:')) {
+                    newLines.push('To: adrienne.caffarel-sourcegraph@airbase.com');
+                    foundTo = true;
+                } else if (line.toLowerCase().startsWith('subject:')) {
+                    // Keep original subject but could prefix with [Receipt] if needed
+                    newLines.push(line);
+                } else if (!line.toLowerCase().startsWith('bcc:') && 
+                          !line.toLowerCase().startsWith('cc:')) {
+                    // Keep other headers except BCC/CC
+                    newLines.push(line);
+                }
+            } else {
+                // Keep body as-is
+                newLines.push(line);
+            }
+        }
+
+        const modifiedEmail = newLines.join('\n');
+        const encodedEmail = Buffer.from(modifiedEmail).toString('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+
+        // Send the modified email
+        const result = await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: {
+                raw: encodedEmail
+            }
+        });
+
+        console.log('Email forwarded to Airbase:', result.data.id);
+        
+        res.json({
+            success: true,
+            messageId: result.data.id,
+            recipient: 'adrienne.caffarel-sourcegraph@airbase.com'
+        });
+
+    } catch (error) {
+        console.error('Error forwarding to Airbase:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Send PDF receipt to Airbase inbox via Gmail (legacy - can be removed)
 app.post('/send-to-airbase', async (req, res) => {
     try {
         if (!req.session.googleTokens) {
