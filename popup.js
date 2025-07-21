@@ -1793,14 +1793,46 @@ class ExpenseGadget {
     }
 
     buildTransactionSearchQuery(transaction) {
-        // Build a smart search query for Gmail
-        let query = `"${transaction.vendor}"`;
+        // Extract core vendor name from merchant codes
+        let vendor = transaction.vendor;
         
-        if (transaction.amount) {
-            const amount = transaction.amount.replace('$', '');
-            query += ` "${amount}"`;
+        // Clean up vendor name to make it more searchable
+        if (vendor.includes('AMAZON')) {
+            vendor = 'Amazon';
+        } else if (vendor.includes('UBER')) {
+            vendor = 'Uber';
+        } else if (vendor.includes('DOORDASH') || vendor.includes('DD *')) {
+            vendor = 'DoorDash';
+        } else if (vendor.includes('TASKRABBIT')) {
+            vendor = 'TaskRabbit';
+        } else if (vendor.includes('COSTCO')) {
+            vendor = 'Costco';
+        } else {
+            // Extract first word and remove common merchant prefixes
+            vendor = vendor.replace(/^(TST\*|SQ \*|IC\*|DD \*)/, '').trim();
+            vendor = vendor.split(' ')[0]; // Take first word
+            vendor = vendor.replace(/[*]/g, ''); // Remove asterisks
         }
         
+        // Build search query - just vendor name, no amount (too restrictive)
+        let query = vendor;
+        
+        // Add date range if available
+        if (transaction.date) {
+            const transactionDate = new Date(transaction.date);
+            const dayBefore = new Date(transactionDate);
+            dayBefore.setDate(dayBefore.getDate() - 1);
+            const dayAfter = new Date(transactionDate);
+            dayAfter.setDate(dayAfter.getDate() + 1);
+            
+            const formatDate = (date) => {
+                return date.getFullYear() + '/' + (date.getMonth() + 1) + '/' + date.getDate();
+            };
+            
+            query += ` after:${formatDate(dayBefore)} before:${formatDate(dayAfter)}`;
+        }
+        
+        console.log(`Original: ${transaction.vendor} → Cleaned: ${vendor} → Query: ${query}`);
         return query;
     }
 
