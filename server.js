@@ -9,7 +9,7 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const validator = require('validator');
-const vision = require('@google-cloud/vision');
+// const vision = require('@google-cloud/vision');
 
 
 
@@ -2293,34 +2293,11 @@ const missingSessionSecret = !process.env.SESSION_SECRET;
 // Experimental Vision API endpoint for testing
 app.post('/vision-test', async (req, res) => {
     try {
-        // Initialize Vision client - use environment variables in production, JSON file locally
-        let clientConfig;
-        
-        if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-            // Production: use environment variable
-            const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-            clientConfig = {
-                projectId: credentials.project_id,
-                credentials: credentials
-            };
-        } else {
-            // Local development: use JSON file
-            clientConfig = {
-                projectId: 'sourcegraph-dev',
-                keyFilename: './sourcegraph-dev-0fb0280dc0e5.json'
-            };
-        }
-        
-        const client = new vision.ImageAnnotatorClient(clientConfig);
-        console.log('Vision API test endpoint called');
-        
-        // For now, just test that we can connect to Vision API
+        // Temporarily disabled - debugging deployment issue
         res.json({
-            success: true,
-            message: 'Vision API client initialized successfully',
-            projectId: clientConfig.projectId,
-            timestamp: new Date().toISOString(),
-            environment: process.env.GOOGLE_SERVICE_ACCOUNT_JSON ? 'production' : 'development'
+            success: false,
+            message: 'Vision API temporarily disabled - debugging deployment',
+            timestamp: new Date().toISOString()
         });
         
     } catch (error) {
