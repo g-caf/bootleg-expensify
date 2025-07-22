@@ -767,79 +767,7 @@ app.post('/debug/test-date-extraction', requireDebugAuth, (req, res) => {
     res.json(result);
 });
 
-// Debug endpoint to test PDFShift with detailed logging
-app.get('/debug/test-pdfshift', requireDebugAuth, async (req, res) => {
-    try {
-        const token = process.env.PDFSHIFT_API_KEY;
-        console.log('=== PDFSHIFT DEBUG TEST ===');
-        console.log('Token available:', !!token);
-        console.log('Token starts with:', token ? token.substring(0, 8) + '...' : 'N/A');
-
-        if (!token || token === 'YOUR_PDFSHIFT_KEY') {
-            return res.status(400).json({ error: 'PDFSHIFT_API_KEY not set' });
-        }
-
-        const simpleHTML = `<!DOCTYPE html>
-<html>
-<head><title>Test</title></head>
-<body><h1>Test PDF Generation with PDFShift</h1><p>This is a test from ${new Date().toISOString()}.</p></body>
-</html>`;
-
-        const requestBody = {
-            source: simpleHTML,
-            format: 'A4',
-            margin: '0.5in'
-        };
-
-        console.log('Making request to PDFShift...');
-        console.log('Request URL:', 'https://api.pdfshift.io/v3/convert/pdf');
-        console.log('Request body size:', JSON.stringify(requestBody).length);
-
-        const authHeader = `Basic ${Buffer.from('api:' + token).toString('base64')}`;
-        console.log('Auth header format:', authHeader.substring(0, 20) + '...');
-
-        const response = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authHeader
-            },
-            body: JSON.stringify(requestBody)
-        });
-
-        console.log('Response status:', response.status);
-        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.log('Error response body:', errorText);
-            return res.status(500).json({
-                error: `PDFShift API error: ${response.status}`,
-                details: errorText,
-                headers: Object.fromEntries(response.headers.entries())
-            });
-        }
-
-        const arrayBuffer = await response.arrayBuffer();
-        const pdfBuffer = Buffer.from(arrayBuffer);
-        const pdfHeader = pdfBuffer.toString('ascii', 0, 4);
-
-        console.log('Success! PDF generated, size:', pdfBuffer.length);
-        console.log('PDF header:', pdfHeader);
-
-        res.json({
-            success: true,
-            pdfSize: pdfBuffer.length,
-            pdfHeader: pdfHeader,
-            isValidPDF: pdfHeader === '%PDF',
-            responseHeaders: Object.fromEntries(response.headers.entries())
-        });
-
-    } catch (error) {
-        console.error('PDFShift test error:', error);
-        res.status(500).json({ error: error.message, stack: error.stack });
-    }
-});
+// Legacy PDF endpoints removed - we now forward emails directly
 
 // Gmail scanning endpoint
 app.post('/scan-gmail', strictLimiter, async (req, res) => {
@@ -1313,7 +1241,8 @@ async function processEmailContent(htmlContent, subject, sender, tokens, emailDa
         console.log(`    📋 Creating PDF receipt...`);
 
         // Generate PDF with PDFShift
-        const pdfBuffer = await createEmailReceiptPDFWithPDFShift({
+        // PDF generation removed - we now forward emails directly
+        const pdfBuffer = null; // Legacy PDF generation disabled
             sender,
             subject,
             vendor: vendor || 'Not found',
@@ -1717,11 +1646,8 @@ async function createEmailReceiptPDFWithPDFShift(data) {
     try {
         console.log(`    📄 Starting PDFShift PDF generation...`);
         
-        // Check if API key is configured
-        const apiKey = process.env.PDFSHIFT_API_KEY;
-        if (!apiKey || apiKey === 'YOUR_PDFSHIFT_KEY') {
-            throw new Error('PDFSHIFT_API_KEY not configured');
-        }
+        // PDFShift disabled - functionality removed
+        throw new Error('PDF generation disabled - we now forward emails directly');
         console.log(`    🔑 API key configured: ${apiKey.substring(0, 8)}...`);
 
         // Create email-like HTML for natural rendering
@@ -2201,8 +2127,8 @@ app.post('/convert-email-to-pdf', strictLimiter, async (req, res) => {
       </html>
     `;
 
-        // Convert HTML to PDF with PDFShift
-        const pdfshiftToken = process.env.PDFSHIFT_API_KEY;
+        // PDFShift disabled - functionality removed
+        throw new Error('PDF generation disabled - we now forward emails directly');
         const response = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
             method: 'POST',
             headers: {
@@ -2252,13 +2178,11 @@ app.post('/convert-email-to-pdf', strictLimiter, async (req, res) => {
     }
 });
 
-// Debug endpoint to check PDFShift configuration
+// Legacy PDFShift endpoint disabled
 app.get('/debug-pdfshift', requireDebugAuth, (req, res) => {
-    const apiKey = process.env.PDFSHIFT_API_KEY;
     res.json({
-        hasApiKey: !!apiKey,
-        keyPrefix: apiKey ? apiKey.substring(0, 8) + '...' : 'No key',
-        keyLength: apiKey ? apiKey.length : 0
+        status: 'disabled',
+        message: 'PDFShift functionality removed - we now forward emails directly'
     });
 });
 
@@ -2295,7 +2219,7 @@ app.get('/debug/email-headers/:messageId', requireDebugAuth, async (req, res) =>
 });
 
 // Validate critical environment variables
-const criticalEnvVars = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'PDFSHIFT_API_KEY'];
+const criticalEnvVars = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'];
 const missingCriticalVars = criticalEnvVars.filter(envVar => !process.env[envVar]);
 const missingSessionSecret = !process.env.SESSION_SECRET;
 
