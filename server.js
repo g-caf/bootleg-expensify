@@ -1240,23 +1240,15 @@ async function processEmailContent(htmlContent, subject, sender, tokens, emailDa
         // Create a proper PDF receipt with PDFShift
         console.log(`    📋 Creating PDF receipt...`);
 
-        // Generate PDF with PDFShift
         // PDF generation removed - we now forward emails directly
+        console.log('Skipping PDF generation - forwarding email directly instead');
         const pdfBuffer = null; // Legacy PDF generation disabled
-            sender,
-            subject,
-            vendor: vendor || 'Not found',
-            amount: amount || 'Not found',
-            receiptDate: receiptDate || 'Not found',
-            emailContent: text.substring(0, 1500),
-            htmlContent: htmlContent // Pass raw HTML for better rendering
-        });
 
-        console.log(`    Generated PDF: ${pdfBuffer.length} bytes with PDFShift`);
+        console.log(`    PDF generation skipped - using direct email forwarding`);
 
-        // Check if we got a valid PDF or text fallback
-        const isPDF = pdfBuffer.toString('ascii', 0, 4) === '%PDF';
-        console.log(`    📋 Generated content type: ${isPDF ? 'Valid PDF' : 'Text fallback'}`);
+        // PDF generation disabled - using email forwarding instead
+        const isPDF = false;
+        console.log(`    📋 Using email forwarding instead of PDF generation`);
 
         // Upload to Google Drive only if we have a valid PDF
         let driveUpload = null;
