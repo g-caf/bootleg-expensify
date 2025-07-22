@@ -27,7 +27,7 @@ class GmailClient {
         try {
             // Use the existing server-side Google OAuth flow
             // This will open the same auth flow that's used for Google Drive
-            const authUrl = 'https://bootleg-expensify.onrender.com/auth/google';
+            const authUrl = 'https://your-app-name.onrender.com/auth/google';
             window.open(authUrl, '_blank', 'width=500,height=600');
 
             // Check for authentication status periodically
@@ -904,6 +904,7 @@ class ExpenseGadget {
         // Initialize autoscan functionality when authenticated
         if (isAuthenticated && !this.autoscanInitialized) {
             this.initializeAutoscan();
+            this.initializeEmailMonitoring(); // Add secure email monitoring
             this.autoscanInitialized = true;
         }
     }
@@ -1481,9 +1482,10 @@ class ExpenseGadget {
         searchResults.innerHTML = '';
     }
 
-    async forwardEmailToAirbase(emailId, buttonElement) {
+    async forwardEmailToAirbase(emailId, buttonElement, airbaseAmounts = null) {
         console.log('=== FORWARD EMAIL TO AIRBASE ===');
         console.log('Email ID:', emailId);
+        console.log('Airbase amounts for chunking:', airbaseAmounts);
 
         // Disable button and show loading
         buttonElement.disabled = true;
@@ -1491,15 +1493,20 @@ class ExpenseGadget {
 
         try {
             // Forward email directly to Airbase inbox
+            const requestBody = { emailId: emailId };
+            
+            // Include Airbase amounts for Amazon chunking if provided
+            if (airbaseAmounts && airbaseAmounts.length > 0) {
+                requestBody.airbaseAmounts = airbaseAmounts;
+            }
+            
             const response = await fetch('https://bootleg-expensify.onrender.com/forward-to-airbase', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 credentials: 'include',
-                body: JSON.stringify({
-                    emailId: emailId
-                })
+                body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
@@ -1510,8 +1517,16 @@ class ExpenseGadget {
             console.log('Forward result:', result);
 
             if (result.success) {
-                buttonElement.textContent = '✅ Sent to Airbase';
-                buttonElement.style.background = '#10b981';
+                if (result.chunked) {
+                    // Amazon email was chunked into multiple emails
+                    buttonElement.textContent = `✅ ${result.sentEmails} emails sent`;
+                    buttonElement.style.background = '#10b981';
+                    console.log(`Amazon email chunked: ${result.sentEmails}/${result.totalTransactions} transactions sent`);
+                } else {
+                    // Regular email forwarding
+                    buttonElement.textContent = '✅ Sent to Airbase';
+                    buttonElement.style.background = '#10b981';
+                }
             } else {
                 throw new Error(result.error || 'Forward failed');
             }
@@ -1608,6 +1623,95 @@ class ExpenseGadget {
         // Hide search results
         this.clearSearchResults();
         this.hideScanResults();
+    }
+
+    // Secure Email Monitoring Controls
+    async initializeEmailMonitoring() {
+        console.log('🔒 Initializing secure email monitoring controls...');
+        
+        // Check if monitoring is already active
+        const status = await this.getMonitoringStatus();
+        this.updateMonitoringUI(status);
+        
+        // Set up monitoring controls
+        this.setupMonitoringControls();
+    }
+
+    async getMonitoringStatus() {
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getMonitoringStatus' });
+            return response || { active: false };
+        } catch (error) {
+            console.error('Failed to get monitoring status:', error);
+            return { active: false };
+        }
+    }
+
+    async startEmailMonitoring() {
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'startMonitoring' });
+            if (response.success) {
+                this.showStatus('📧 Email monitoring started - receipts will be processed automatically');
+                const status = await this.getMonitoringStatus();
+                this.updateMonitoringUI(status);
+            }
+        } catch (error) {
+            console.error('Failed to start monitoring:', error);
+            this.showStatus('❌ Failed to start email monitoring');
+        }
+    }
+
+    async stopEmailMonitoring() {
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'stopMonitoring' });
+            if (response.success) {
+                this.showStatus('⏹️ Email monitoring stopped');
+                const status = await this.getMonitoringStatus();
+                this.updateMonitoringUI(status);
+            }
+        } catch (error) {
+            console.error('Failed to stop monitoring:', error);
+            this.showStatus('❌ Failed to stop email monitoring');
+        }
+    }
+
+    updateMonitoringUI(status) {
+        const autoscanStatus = document.getElementById('autoscanStatus');
+        const gmailScanBtn = document.getElementById('gmailScanBtn');
+        
+        if (status.active) {
+            if (autoscanStatus) {
+                autoscanStatus.textContent = `📧 Monitoring active (last: ${status.lastCheck})`;
+                autoscanStatus.style.color = '#10b981';
+            }
+            if (gmailScanBtn && gmailScanBtn.textContent !== 'Stop Monitoring') {
+                gmailScanBtn.textContent = 'Stop Monitoring';
+                gmailScanBtn.style.background = '#ef4444';
+            }
+        } else {
+            if (autoscanStatus) {
+                autoscanStatus.textContent = 'Start email monitoring';
+                autoscanStatus.style.color = '#9ca3af';
+            }
+            if (gmailScanBtn && gmailScanBtn.textContent !== 'Start Monitoring') {
+                gmailScanBtn.textContent = 'Start Monitoring';
+                gmailScanBtn.style.background = '#f44e40';
+            }
+        }
+    }
+
+    setupMonitoringControls() {
+        const gmailScanBtn = document.getElementById('gmailScanBtn');
+        if (gmailScanBtn) {
+            gmailScanBtn.addEventListener('click', async () => {
+                const status = await this.getMonitoringStatus();
+                if (status.active) {
+                    await this.stopEmailMonitoring();
+                } else {
+                    await this.startEmailMonitoring();
+                }
+            });
+        }
     }
 
     // Autoscan functionality  
@@ -1958,7 +2062,9 @@ class ExpenseGadget {
                         }
                         
                         const fakeButton = document.createElement('button');
-                        await this.forwardEmailToAirbase(email.id, fakeButton);
+                        // Pass all transaction amounts for Amazon chunking
+                        const allAmounts = transactions.map(t => t.amount).filter(amount => amount);
+                        await this.forwardEmailToAirbase(email.id, fakeButton, allAmounts);
                         totalConverted++;
                         
                         console.log(`✅ Forwarded: ${transaction.vendor}`);

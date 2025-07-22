@@ -4,7 +4,8 @@
   "version": "1.0",
   "description": "Automatically process and organize expense receipts",
   "permissions": [
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "https://bootleg-expensify.onrender.com/*",

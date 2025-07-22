@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
-const pdf = require('pdf-parse');
+// const pdf = require('pdf-parse'); // No longer needed - we forward emails directly
 const session = require('express-session');
 const { google } = require('googleapis');
 const fs = require('fs');
@@ -10,6 +10,10 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const validator = require('validator');
 const vision = require('@google-cloud/vision');
+
+// AI service for email analysis (using OpenAI for now)
+// In production, you'd set OPENAI_API_KEY environment variable
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 
 
@@ -2397,6 +2401,82 @@ app.post('/extract-transactions', async (req, res) => {
     }
 });
 
+// Image validation and utility functions
+function validateImageData(imageData) {
+    console.log('Validating image data...');
+    
+    if (!imageData || typeof imageData !== 'string') {
+        throw new Error('Invalid image data format');
+    }
+    
+    // Check if it's a valid base64 data URL
+    const dataUrlPattern = /^data:image\/(png|jpeg|jpg|gif|webp);base64,/i;
+    if (!dataUrlPattern.test(imageData)) {
+        throw new Error('Invalid image format. Supported formats: PNG, JPEG, GIF, WebP');
+    }
+    
+    // Extract the base64 part
+    const base64Data = imageData.split(',')[1];
+    if (!base64Data) {
+        throw new Error('No image data found');
+    }
+    
+    // Check file size (limit to 10MB)
+    const sizeInBytes = (base64Data.length * 3) / 4;
+    const maxSizeInBytes = 10 * 1024 * 1024; // 10MB
+    
+    if (sizeInBytes > maxSizeInBytes) {
+        throw new Error(`Image too large. Maximum size: 10MB, received: ${Math.round(sizeInBytes / 1024 / 1024)}MB`);
+    }
+    
+    console.log(`Image validation passed. Size: ${Math.round(sizeInBytes / 1024)}KB`);
+    return {
+        base64Data,
+        mimeType: imageData.match(dataUrlPattern)[0].split(';')[0].split(':')[1],
+        sizeInBytes
+    };
+}
+
+function getImageExtension(imageData) {
+    const mimeTypeMatch = imageData.match(/^data:image\/([a-z]+);base64,/i);
+    if (!mimeTypeMatch) return 'png';
+    
+    const mimeType = mimeTypeMatch[1].toLowerCase();
+    switch (mimeType) {
+        case 'jpeg':
+        case 'jpg':
+            return 'jpg';
+        case 'png':
+            return 'png';
+        case 'gif':
+            return 'gif';
+        case 'webp':
+            return 'webp';
+        default:
+            return 'png';
+    }
+}
+
+function generateScreenshotFilename(originalName, imageData, metadata = {}) {
+    const timestamp = new Date().toISOString().split('T')[0];
+    const extension = getImageExtension(imageData);
+    
+    if (originalName && originalName.trim()) {
+        // Use provided name, ensure it has correct extension
+        const nameWithoutExt = originalName.replace(/\.[^/.]+$/, '');
+        return `${nameWithoutExt}.${extension}`;
+    }
+    
+    // Generate descriptive filename
+    let prefix = 'receipt';
+    if (metadata.vendor) {
+        const cleanVendor = metadata.vendor.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+        prefix = cleanVendor.toLowerCase() || 'receipt';
+    }
+    
+    return `${prefix}-${timestamp}.${extension}`;
+}
+
 // Parse Airbase transaction data from Vision API text
 function parseAirbaseTransactions(textAnnotations) {
     console.log('parseAirbaseTransactions called with', textAnnotations.length, 'annotations');
@@ -2530,6 +2610,529 @@ function calculateConfidence(vendor, amount, dateMatch) {
     return Math.min(score, 1.0);
 }
 
+// AI-Enhanced Email Analysis Functions
+async function analyzeEmailWithAI(emailContent, emailSubject = '', emailFrom = '') {
+    console.log('🤖 Starting AI analysis of email...');
+    
+    if (!OPENAI_API_KEY) {
+        console.log('⚠️ No OpenAI API key - falling back to pattern matching');
+        return fallbackEmailAnalysis(emailContent, emailSubject, emailFrom);
+    }
+
+    try {
+        const analysisPrompt = `
+Analyze this email for expense/receipt processing:
+
+From: ${emailFrom}
+Subject: ${emailSubject}
+Content: ${emailContent.substring(0, 2000)}
+
+Return a JSON object with:
+{
+  "isReceipt": boolean,
+  "confidence": number (0-1),
+  "vendor": string or null,
+  "amounts": array of dollar amounts found,
+  "transactionCount": number,
+  "shouldChunk": boolean,
+  "category": string or null,
+  "reasoning": string
+}
+
+Focus on:
+- Is this actually a receipt/invoice (not marketing/shipping updates)?
+- What dollar amounts represent actual transactions vs totals/discounts?
+- For Amazon: should this be split into multiple transaction emails?
+- What expense category might this be?
+
+Be conservative - when uncertain, set lower confidence.`;
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-4',
+                messages: [{
+                    role: 'user',
+                    content: analysisPrompt
+                }],
+                max_tokens: 500,
+                temperature: 0.1
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`OpenAI API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const aiAnalysis = JSON.parse(result.choices[0].message.content);
+        
+        console.log('🎯 AI Analysis Result:', {
+            isReceipt: aiAnalysis.isReceipt,
+            confidence: aiAnalysis.confidence,
+            vendor: aiAnalysis.vendor,
+            amountCount: aiAnalysis.amounts?.length || 0,
+            shouldChunk: aiAnalysis.shouldChunk
+        });
+
+        return aiAnalysis;
+
+    } catch (error) {
+        console.error('❌ AI analysis failed:', error);
+        console.log('🔄 Falling back to pattern matching...');
+        return fallbackEmailAnalysis(emailContent, emailSubject, emailFrom);
+    }
+}
+
+function fallbackEmailAnalysis(emailContent, emailSubject = '', emailFrom = '') {
+    console.log('🔍 Using fallback pattern analysis...');
+    
+    const lowerContent = emailContent.toLowerCase();
+    const lowerSubject = emailSubject.toLowerCase();
+    const lowerFrom = emailFrom.toLowerCase();
+    
+    // Basic receipt detection
+    const receiptIndicators = [
+        'receipt', 'invoice', 'order confirmation', 'purchase', 
+        'payment confirmation', 'trip completed', 'booking confirmation'
+    ];
+    
+    const isReceipt = receiptIndicators.some(indicator => 
+        lowerContent.includes(indicator) || lowerSubject.includes(indicator)
+    );
+    
+    // Vendor detection
+    let vendor = null;
+    if (lowerFrom.includes('amazon')) vendor = 'Amazon';
+    else if (lowerFrom.includes('uber')) vendor = 'Uber';
+    else if (lowerFrom.includes('doordash')) vendor = 'DoorDash';
+    
+    // Basic amount extraction
+    const amountMatches = emailContent.match(/\$\d+\.\d{2}/g) || [];
+    const amounts = [...new Set(amountMatches)]; // Remove duplicates
+    
+    return {
+        isReceipt,
+        confidence: isReceipt ? 0.7 : 0.3,
+        vendor,
+        amounts,
+        transactionCount: amounts.length,
+        shouldChunk: vendor === 'Amazon' && amounts.length > 1,
+        category: null,
+        reasoning: 'Pattern-based analysis (no AI available)'
+    };
+}
+
+async function extractAmountsWithAI(emailContent, vendor = null) {
+    console.log('💰 AI-enhanced amount extraction...');
+    
+    if (!OPENAI_API_KEY) {
+        return extractAmountsFromAmazonEmail(emailContent); // Fallback to existing function
+    }
+
+    try {
+        const extractionPrompt = `
+Extract transaction amounts from this ${vendor || 'receipt'} email:
+
+${emailContent.substring(0, 2000)}
+
+Return JSON array of amounts that represent ACTUAL TRANSACTIONS (not totals, discounts, or savings):
+{
+  "transactionAmounts": ["$45.67", "$23.45"],
+  "totalAmount": "$69.12",
+  "excludedAmounts": {
+    "$15.00": "shipping (already included in item prices)",
+    "$5.99": "discount (not a transaction)"
+  },
+  "reasoning": "explanation of extraction logic"
+}
+
+For Amazon: Extract individual item prices or shipment totals, NOT the overall order total.
+For restaurants: Extract the final total, NOT individual items.
+Exclude: discounts, savings, original prices, tax-inclusive totals when itemized.`;
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-4',
+                messages: [{ role: 'user', content: extractionPrompt }],
+                max_tokens: 400,
+                temperature: 0.1
+            })
+        });
+
+        const result = await response.json();
+        const extraction = JSON.parse(result.choices[0].message.content);
+        
+        console.log('💰 AI Amount Extraction:', {
+            found: extraction.transactionAmounts?.length || 0,
+            amounts: extraction.transactionAmounts,
+            excluded: Object.keys(extraction.excludedAmounts || {}).length
+        });
+
+        return extraction.transactionAmounts || [];
+
+    } catch (error) {
+        console.error('❌ AI amount extraction failed:', error);
+        return extractAmountsFromAmazonEmail(emailContent);
+    }
+}
+
+async function intelligentChunkingDecision(emailContent, amounts, vendor) {
+    console.log('🧠 AI chunking decision analysis...');
+    
+    if (!OPENAI_API_KEY || !amounts.length) {
+        return amounts.length > 1; // Simple fallback
+    }
+
+    try {
+        const chunkingPrompt = `
+Decide how to split this ${vendor} email for expense processing:
+
+Amounts found: ${amounts.join(', ')}
+Email preview: ${emailContent.substring(0, 1000)}
+
+Should each amount become a separate email for expense matching?
+
+Return JSON:
+{
+  "shouldChunk": boolean,
+  "chunkingStrategy": "by_shipment" | "by_item" | "single_email",
+  "amountsToProcess": ["$45.67", "$23.45"],
+  "reasoning": "explanation"
+}
+
+Consider:
+- Amazon: Usually chunk by shipment/delivery, not by individual items
+- Restaurants: Single email even if itemized
+- Hotels: Single email for entire stay
+- Uber: Single email per trip`;
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-4',
+                messages: [{ role: 'user', content: chunkingPrompt }],
+                max_tokens: 300,
+                temperature: 0.1
+            })
+        });
+
+        const result = await response.json();
+        const decision = JSON.parse(result.choices[0].message.content);
+        
+        console.log('🧠 AI Chunking Decision:', {
+            shouldChunk: decision.shouldChunk,
+            strategy: decision.chunkingStrategy,
+            amountCount: decision.amountsToProcess?.length || 0
+        });
+
+        return decision;
+
+    } catch (error) {
+        console.error('❌ AI chunking decision failed:', error);
+        return {
+            shouldChunk: amounts.length > 1,
+            chunkingStrategy: 'by_amount',
+            amountsToProcess: amounts,
+            reasoning: 'Fallback: chunk if multiple amounts found'
+        };
+    }
+}
+
+// Amazon email detection and parsing functions
+function isAmazonEmail(emailContent) {
+    const lowerContent = emailContent.toLowerCase();
+    
+    // Check for Amazon domains and sender patterns
+    const amazonDomains = [
+        'amazon.com',
+        'amazon.ca', 
+        'amazon.co.uk',
+        '@amazon.',
+        'from: amazon',
+        'amazon order',
+        'order confirmation',
+        'shipment notification'
+    ];
+    
+    const hasAmazonIndicator = amazonDomains.some(domain => lowerContent.includes(domain));
+    
+    // Also check for typical Amazon subject patterns
+    const amazonSubjectPatterns = [
+        'your order',
+        'order confirmation',
+        'shipment',
+        'delivery',
+        'invoice'
+    ];
+    
+    const hasAmazonSubject = amazonSubjectPatterns.some(pattern => 
+        lowerContent.includes('subject:') && lowerContent.includes(pattern)
+    );
+    
+    return hasAmazonIndicator || (hasAmazonSubject && lowerContent.includes('amazon'));
+}
+
+function extractAmountsFromAmazonEmail(emailContent) {
+    console.log('Extracting amounts from Amazon email...');
+    
+    // Find all dollar amounts in various formats, prioritizing Amazon-specific patterns
+    const amountRegexes = [
+        // Common Amazon patterns
+        /Item\s+price:\s*\$(\d+\.\d{2})/gi,      // Item price: $123.45
+        /Price:\s*\$(\d+\.\d{2})/gi,             // Price: $123.45
+        /Total:\s*\$(\d+\.\d{2})/gi,             // Total: $123.45
+        /Subtotal:\s*\$(\d+\.\d{2})/gi,          // Subtotal: $123.45
+        /Order\s+total:\s*\$(\d+\.\d{2})/gi,     // Order total: $123.45
+        /Amount:\s*\$(\d+\.\d{2})/gi,            // Amount: $123.45
+        /Shipping:\s*\$(\d+\.\d{2})/gi,          // Shipping: $123.45
+        /Tax:\s*\$(\d+\.\d{2})/gi,               // Tax: $123.45
+        
+        // Generic patterns (lower priority)
+        /\$(\d+\.\d{2})/g,                       // $123.45
+        /USD\s*(\d+\.\d{2})/gi,                  // USD 123.45
+        /(\d+\.\d{2})\s*USD/gi,                  // 123.45 USD
+    ];
+    
+    const amounts = new Set(); // Use Set to avoid duplicates
+    const excludePatterns = [
+        /free shipping/i,
+        /\$0\.00/,
+        /\$0\.01/,  // Sometimes used for authorization checks
+        /save \$/i,
+        /discount/i
+    ];
+    
+    for (const regex of amountRegexes) {
+        let match;
+        while ((match = regex.exec(emailContent)) !== null) {
+            const fullMatch = match[0];
+            const amount = match[1] || match[0].replace(/[^\d.]/g, '');
+            const amountNum = parseFloat(amount);
+            
+            // Skip if amount is invalid or should be excluded
+            if (amountNum <= 0 || amountNum > 10000) continue; // Reasonable bounds
+            
+            // Check if this match should be excluded
+            const shouldExclude = excludePatterns.some(pattern => 
+                pattern.test(fullMatch) || pattern.test(emailContent.substring(Math.max(0, match.index - 50), match.index + 50))
+            );
+            
+            if (!shouldExclude) {
+                amounts.add('$' + amountNum.toFixed(2));
+            }
+        }
+    }
+    
+    const amountArray = Array.from(amounts).sort((a, b) => {
+        const aNum = parseFloat(a.replace('$', ''));
+        const bNum = parseFloat(b.replace('$', ''));
+        return bNum - aNum; // Sort descending
+    });
+    
+    console.log('Extracted amounts:', amountArray);
+    return amountArray;
+}
+
+function matchTransactionAmounts(airbaseAmounts, amazonAmounts) {
+    console.log('Matching transaction amounts...');
+    console.log('Airbase amounts:', airbaseAmounts);
+    console.log('Amazon amounts:', amazonAmounts);
+    
+    const matches = [];
+    const usedAmazonAmounts = new Set();
+    
+    for (const airbaseAmount of airbaseAmounts) {
+        // Find exact match in Amazon amounts
+        const exactMatch = amazonAmounts.find(amazonAmount => 
+            amazonAmount === airbaseAmount && !usedAmazonAmounts.has(amazonAmount)
+        );
+        
+        if (exactMatch) {
+            matches.push({
+                airbaseAmount,
+                amazonAmount: exactMatch,
+                confidence: 1.0
+            });
+            usedAmazonAmounts.add(exactMatch);
+        } else {
+            // No exact match found
+            matches.push({
+                airbaseAmount,
+                amazonAmount: null,
+                confidence: 0.0
+            });
+        }
+    }
+    
+    console.log('Amount matches:', matches);
+    return matches;
+}
+
+function createAIEnhancedChunkedEmail(originalEmailContent, targetAmount, vendor, reasoning) {
+    console.log('📧 Creating AI-enhanced chunked email for:', targetAmount);
+    
+    // Parse the original email to extract headers and body
+    const lines = originalEmailContent.split('\n');
+    const headerLines = [];
+    const bodyLines = [];
+    let inHeaders = true;
+    
+    for (const line of lines) {
+        if (inHeaders && line.trim() === '') {
+            inHeaders = false;
+            continue;
+        }
+        
+        if (inHeaders) {
+            headerLines.push(line);
+        } else {
+            bodyLines.push(line);
+        }
+    }
+    
+    // Modify subject line to include transaction amount and AI context
+    const modifiedHeaders = [];
+    for (const line of headerLines) {
+        if (line.toLowerCase().startsWith('subject:')) {
+            const originalSubject = line.substring(8).trim();
+            modifiedHeaders.push(`Subject: ${originalSubject} - Transaction ${targetAmount} [AI-Processed]`);
+        } else if (line.toLowerCase().startsWith('to:')) {
+            modifiedHeaders.push('To: adrienne.caffarel-sourcegraph@airbase.com');
+        } else if (!line.toLowerCase().startsWith('bcc:') && 
+                  !line.toLowerCase().startsWith('cc:')) {
+            modifiedHeaders.push(line);
+        }
+    }
+    
+    // Create enhanced body content
+    const bodyContent = bodyLines.join('\n');
+    
+    // Add AI processing header
+    const aiHeader = `
+[EXPENSE GADGET - AI-ENHANCED PROCESSING]
+🤖 This email was automatically processed using AI analysis
+💰 Transaction Amount: ${targetAmount}
+🏪 Vendor: ${vendor || 'Detected from email'}
+🧠 Processing Logic: ${reasoning}
+📧 Optimized for Airbase matching
+
+---
+RELEVANT CONTENT FOR ${targetAmount}:
+${findRelevantContentForAmount(bodyContent, targetAmount)}
+
+---
+FULL ORIGINAL EMAIL:
+`;
+    
+    const modifiedBody = aiHeader + bodyContent;
+    
+    // Combine headers and body
+    const chunkedEmail = modifiedHeaders.join('\n') + '\n\n' + modifiedBody;
+    
+    return chunkedEmail;
+}
+
+function createChunkedAmazonEmail(originalEmailContent, targetAmount, orderInfo = {}) {
+    console.log('Creating chunked email for amount:', targetAmount);
+    
+    // Parse the original email to extract headers and body
+    const lines = originalEmailContent.split('\n');
+    const headerLines = [];
+    const bodyLines = [];
+    let inHeaders = true;
+    
+    for (const line of lines) {
+        if (inHeaders && line.trim() === '') {
+            inHeaders = false;
+            continue;
+        }
+        
+        if (inHeaders) {
+            headerLines.push(line);
+        } else {
+            bodyLines.push(line);
+        }
+    }
+    
+    // Modify subject line to include transaction amount
+    const modifiedHeaders = [];
+    for (const line of headerLines) {
+        if (line.toLowerCase().startsWith('subject:')) {
+            const originalSubject = line.substring(8).trim(); // Remove "Subject: "
+            modifiedHeaders.push(`Subject: ${originalSubject} - Transaction ${targetAmount}`);
+        } else if (line.toLowerCase().startsWith('to:')) {
+            modifiedHeaders.push('To: adrienne.caffarel-sourcegraph@airbase.com');
+        } else if (!line.toLowerCase().startsWith('bcc:') && 
+                  !line.toLowerCase().startsWith('cc:')) {
+            modifiedHeaders.push(line);
+        }
+    }
+    
+    // Create focused body content that highlights the relevant transaction
+    const bodyContent = bodyLines.join('\n');
+    
+    // Add a header explaining this is a chunked transaction
+    const chunkHeader = `
+[EXPENSE GADGET - TRANSACTION MATCH]
+This email has been processed to match Airbase transaction: ${targetAmount}
+Original order may contain multiple transactions.
+
+---
+TRANSACTION DETAILS FOR ${targetAmount}:
+${findRelevantContentForAmount(bodyContent, targetAmount)}
+
+---
+FULL ORIGINAL EMAIL CONTENT:
+`;
+    
+    const modifiedBody = chunkHeader + bodyContent;
+    
+    // Combine headers and body
+    const chunkedEmail = modifiedHeaders.join('\n') + '\n\n' + modifiedBody;
+    
+    return chunkedEmail;
+}
+
+function findRelevantContentForAmount(emailContent, targetAmount) {
+    // Find lines in the email that contain or are near the target amount
+    const lines = emailContent.split('\n');
+    const relevantLines = [];
+    const amountWithoutDollar = targetAmount.replace('$', '');
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        // Check if this line contains the target amount
+        if (line.includes(targetAmount) || line.includes(amountWithoutDollar)) {
+            // Include this line and surrounding context
+            const start = Math.max(0, i - 2);
+            const end = Math.min(lines.length - 1, i + 2);
+            
+            for (let j = start; j <= end; j++) {
+                if (!relevantLines.includes(lines[j])) {
+                    relevantLines.push(lines[j]);
+                }
+            }
+        }
+    }
+    
+    return relevantLines.length > 0 ? relevantLines.join('\n') : 'Amount found in email content';
+}
+
 // Forward email to Airbase inbox via Gmail
 app.post('/forward-to-airbase', async (req, res) => {
     try {
@@ -2541,7 +3144,7 @@ app.post('/forward-to-airbase', async (req, res) => {
             return res.status(401).json({ error: 'Not authenticated with Google' });
         }
 
-        const { emailId } = req.body;
+        const { emailId, airbaseAmounts } = req.body;
         
         if (!emailId) {
             console.log('No email ID provided');
@@ -2571,69 +3174,212 @@ app.post('/forward-to-airbase', async (req, res) => {
         console.log('Email content length:', emailContent.length);
         console.log('Email preview:', emailContent.substring(0, 200) + '...');
 
-        // Parse the email to modify headers
-        const lines = emailContent.split('\n');
-        const newLines = [];
-        let inHeaders = true;
-        let foundTo = false;
-
-        for (const line of lines) {
-            if (inHeaders && line.trim() === '') {
-                // End of headers, add our recipient and continue with body
-                if (!foundTo) {
-                    newLines.push('To: adrienne.caffarel-sourcegraph@airbase.com');
-                }
-                newLines.push(''); // Empty line to separate headers from body
-                inHeaders = false;
-                continue;
+        // Extract email headers for AI analysis
+        let emailFrom = '';
+        let emailSubject = '';
+        const headerLines = emailContent.split('\n');
+        for (const line of headerLines) {
+            if (line.toLowerCase().startsWith('from:')) {
+                emailFrom = line.substring(5).trim();
+            } else if (line.toLowerCase().startsWith('subject:')) {
+                emailSubject = line.substring(8).trim();
             }
-
-            if (inHeaders) {
-                // Modify headers
-                if (line.toLowerCase().startsWith('to:')) {
-                    newLines.push('To: adrienne.caffarel-sourcegraph@airbase.com');
-                    foundTo = true;
-                } else if (line.toLowerCase().startsWith('subject:')) {
-                    // Keep original subject but could prefix with [Receipt] if needed
-                    newLines.push(line);
-                } else if (!line.toLowerCase().startsWith('bcc:') && 
-                          !line.toLowerCase().startsWith('cc:')) {
-                    // Keep other headers except BCC/CC
-                    newLines.push(line);
-                }
-            } else {
-                // Keep body as-is
-                newLines.push(line);
-            }
+            if (line.trim() === '') break; // End of headers
         }
 
-        const modifiedEmail = newLines.join('\n');
-        console.log('Modified email length:', modifiedEmail.length);
-        console.log('Modified email preview:', modifiedEmail.substring(0, 300) + '...');
-        
-        const encodedEmail = Buffer.from(modifiedEmail).toString('base64')
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_')
-            .replace(/=+$/, '');
+        console.log('📧 Email metadata:', { from: emailFrom, subject: emailSubject });
 
-        console.log('Sending email to Gmail API...');
-        // Send the modified email
-        const result = await gmail.users.messages.send({
-            userId: 'me',
-            requestBody: {
-                raw: encodedEmail
+        // AI-powered email analysis
+        const aiAnalysis = await analyzeEmailWithAI(emailContent, emailSubject, emailFrom);
+        console.log('🤖 AI Analysis complete:', aiAnalysis);
+
+        // Check if we should process with AI-enhanced chunking
+        const shouldUseAIChunking = (aiAnalysis.isReceipt && aiAnalysis.confidence > 0.6) || 
+                                   (airbaseAmounts && airbaseAmounts.length > 0);
+
+        if (shouldUseAIChunking) {
+            console.log('=== AI-ENHANCED EMAIL PROCESSING ===');
+            
+            // Use AI to extract amounts (falls back to pattern matching if no API key)
+            let emailAmounts = [];
+            if (aiAnalysis.amounts && aiAnalysis.amounts.length > 0) {
+                emailAmounts = aiAnalysis.amounts;
+                console.log('📊 Using AI-extracted amounts:', emailAmounts);
+            } else {
+                // Fallback to pattern-based extraction
+                emailAmounts = await extractAmountsWithAI(emailContent, aiAnalysis.vendor);
+                console.log('📊 Using pattern-extracted amounts:', emailAmounts);
             }
-        });
+            
+            // Determine chunking strategy
+            let amountsToProcess = [];
+            let chunkingReason = '';
+            
+            if (airbaseAmounts && airbaseAmounts.length > 0) {
+                // We have Airbase amounts to match against
+                const matches = matchTransactionAmounts(airbaseAmounts, emailAmounts);
+                amountsToProcess = matches.filter(m => m.amazonAmount).map(m => m.airbaseAmount);
+                chunkingReason = 'Matching Airbase transaction amounts';
+                console.log('🎯 Matching mode:', amountsToProcess.length, 'matches found');
+            } else {
+                // Use AI to decide how to chunk
+                const chunkingDecision = await intelligentChunkingDecision(emailContent, emailAmounts, aiAnalysis.vendor);
+                
+                if (chunkingDecision.shouldChunk) {
+                    amountsToProcess = chunkingDecision.amountsToProcess;
+                    chunkingReason = chunkingDecision.reasoning;
+                    console.log('🧠 AI chunking decision:', chunkingDecision.chunkingStrategy);
+                } else {
+                    amountsToProcess = []; // Process as single email
+                    chunkingReason = 'AI recommends single email';
+                    console.log('📧 AI recommends no chunking');
+                }
+            }
+            
+            // Process emails based on AI decision
+            const results = [];
+            let sentCount = 0;
+            
+            if (amountsToProcess.length > 0) {
+                // Send chunked emails
+                for (const amount of amountsToProcess) {
+                    console.log(`📨 Creating chunked email for ${amount}`);
+                    
+                    // Create chunked email content with AI context
+                    const chunkedEmail = createAIEnhancedChunkedEmail(
+                        emailContent, 
+                        amount, 
+                        aiAnalysis.vendor,
+                        chunkingReason
+                    );
+                    
+                    // Encode and send
+                    const encodedEmail = Buffer.from(chunkedEmail).toString('base64')
+                        .replace(/\+/g, '-')
+                        .replace(/\//g, '_')
+                        .replace(/=+$/, '');
+                    
+                    try {
+                        const result = await gmail.users.messages.send({
+                            userId: 'me',
+                            requestBody: {
+                                raw: encodedEmail
+                            }
+                        });
+                        
+                        results.push({
+                            amount: amount,
+                            messageId: result.data.id,
+                            success: true,
+                            method: 'ai_chunked'
+                        });
+                        sentCount++;
+                        
+                        console.log(`✅ Sent AI-chunked email for ${amount}, Message ID: ${result.data.id}`);
+                        
+                    } catch (sendError) {
+                        console.error(`❌ Failed to send chunked email for ${amount}:`, sendError);
+                        results.push({
+                            amount: amount,
+                            success: false,
+                            error: sendError.message,
+                            method: 'ai_chunked'
+                        });
+                    }
+                }
+            } else {
+                // Send single email (AI recommends no chunking)
+                console.log('📧 AI recommends single email - continuing to regular forwarding');
+            }
+            
+            // If we processed chunked emails, return the results
+            if (sentCount > 0) {
+                console.log(`=== AI PROCESSING COMPLETE: ${sentCount} emails sent ===`);
+                
+                res.json({
+                    success: true,
+                    chunked: true,
+                    aiProcessed: true,
+                    vendor: aiAnalysis.vendor,
+                    confidence: aiAnalysis.confidence,
+                    totalTransactions: amountsToProcess.length,
+                    sentEmails: sentCount,
+                    results: results,
+                    recipient: 'adrienne.caffarel-sourcegraph@airbase.com'
+                });
+                return; // Exit early, we're done
+            }
+            
+            // If AI recommended no chunking, fall through to regular forwarding
+            
+        } else {
+            // Regular email forwarding (existing logic)
+            console.log('=== REGULAR EMAIL FORWARDING ===');
+            
+            // Parse the email to modify headers
+            const lines = emailContent.split('\n');
+            const newLines = [];
+            let inHeaders = true;
+            let foundTo = false;
 
-        console.log('Email forwarded to Airbase successfully!');
-        console.log('Message ID:', result.data.id);
-        console.log('Thread ID:', result.data.threadId);
-        
-        res.json({
-            success: true,
-            messageId: result.data.id,
-            recipient: 'adrienne.caffarel-sourcegraph@airbase.com'
-        });
+            for (const line of lines) {
+                if (inHeaders && line.trim() === '') {
+                    // End of headers, add our recipient and continue with body
+                    if (!foundTo) {
+                        newLines.push('To: adrienne.caffarel-sourcegraph@airbase.com');
+                    }
+                    newLines.push(''); // Empty line to separate headers from body
+                    inHeaders = false;
+                    continue;
+                }
+
+                if (inHeaders) {
+                    // Modify headers
+                    if (line.toLowerCase().startsWith('to:')) {
+                        newLines.push('To: adrienne.caffarel-sourcegraph@airbase.com');
+                        foundTo = true;
+                    } else if (line.toLowerCase().startsWith('subject:')) {
+                        // Keep original subject but could prefix with [Receipt] if needed
+                        newLines.push(line);
+                    } else if (!line.toLowerCase().startsWith('bcc:') && 
+                              !line.toLowerCase().startsWith('cc:')) {
+                        // Keep other headers except BCC/CC
+                        newLines.push(line);
+                    }
+                } else {
+                    // Keep body as-is
+                    newLines.push(line);
+                }
+            }
+
+            const modifiedEmail = newLines.join('\n');
+            console.log('Modified email length:', modifiedEmail.length);
+            console.log('Modified email preview:', modifiedEmail.substring(0, 300) + '...');
+            
+            const encodedEmail = Buffer.from(modifiedEmail).toString('base64')
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+
+            console.log('Sending email to Gmail API...');
+            // Send the modified email
+            const result = await gmail.users.messages.send({
+                userId: 'me',
+                requestBody: {
+                    raw: encodedEmail
+                }
+            });
+
+            console.log('Email forwarded to Airbase successfully!');
+            console.log('Message ID:', result.data.id);
+            console.log('Thread ID:', result.data.threadId);
+            
+            res.json({
+                success: true,
+                messageId: result.data.id,
+                recipient: 'adrienne.caffarel-sourcegraph@airbase.com'
+            });
+        }
 
     } catch (error) {
         console.error('Error forwarding to Airbase:', error);
@@ -2643,6 +3389,417 @@ app.post('/forward-to-airbase', async (req, res) => {
         });
     }
 });
+
+// Send screenshot receipt to Airbase inbox via Gmail
+app.post('/send-screenshot-to-airbase', strictLimiter, async (req, res) => {
+    try {
+        console.log('=== SEND SCREENSHOT TO AIRBASE REQUEST ===');
+        
+        if (!req.session.googleTokens) {
+            console.log('No Google tokens in session');
+            return res.status(401).json({ error: 'Not authenticated with Google' });
+        }
+
+        const { imageData, filename, description, amount, vendor } = req.body;
+        
+        if (!imageData) {
+            console.log('No image data provided');
+            return res.status(400).json({ error: 'Image data required' });
+        }
+
+        console.log('Processing screenshot upload...');
+        
+        // Validate image data
+        const validatedImage = validateImageData(imageData);
+        console.log('Image validation successful');
+
+        // Generate filename
+        const finalFilename = generateScreenshotFilename(filename, imageData, { vendor });
+        console.log('Generated filename:', finalFilename);
+
+        // Set Gmail credentials
+        oauth2Client.setCredentials(req.session.googleTokens);
+        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+        console.log('Gmail client configured');
+
+        // Create email content
+        const airbaseEmail = 'adrienne.caffarel-sourcegraph@airbase.com';
+        const timestamp = new Date().toLocaleString();
+        
+        // Build subject line
+        let subjectParts = ['Receipt Screenshot'];
+        if (vendor) subjectParts.push(vendor);
+        if (amount) subjectParts.push(amount);
+        subjectParts.push(new Date().toISOString().split('T')[0]); // Add date
+        const subject = subjectParts.join(' - ');
+
+        // Build email body
+        const bodyParts = [
+            'Automated receipt submission from Expense Gadget',
+            '',
+            `Description: ${description || 'Receipt screenshot'}`,
+        ];
+        
+        if (vendor) bodyParts.push(`Vendor: ${vendor}`);
+        if (amount) bodyParts.push(`Amount: ${amount}`);
+        bodyParts.push(`Submitted: ${timestamp}`);
+        bodyParts.push(`Filename: ${finalFilename}`);
+        
+        const body = bodyParts.join('\n');
+
+        console.log('Email subject:', subject);
+        console.log('Email body preview:', body.substring(0, 200));
+
+        // Create multipart email with image attachment
+        const boundary = '----=_Part_' + Date.now();
+        const rawEmail = [
+            `To: ${airbaseEmail}`,
+            `Subject: ${subject}`,
+            `MIME-Version: 1.0`,
+            `Content-Type: multipart/mixed; boundary="${boundary}"`,
+            '',
+            `--${boundary}`,
+            `Content-Type: text/plain; charset=utf-8`,
+            '',
+            body,
+            '',
+            `--${boundary}`,
+            `Content-Type: ${validatedImage.mimeType}`,
+            `Content-Disposition: attachment; filename="${finalFilename}"`,
+            `Content-Transfer-Encoding: base64`,
+            '',
+            validatedImage.base64Data,
+            '',
+            `--${boundary}--`
+        ].join('\n');
+
+        console.log('Sending email to Gmail API...');
+        console.log('Email size:', rawEmail.length, 'characters');
+
+        // Send email via Gmail API
+        const result = await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: {
+                raw: Buffer.from(rawEmail).toString('base64')
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=+$/, '')
+            }
+        });
+
+        console.log('Screenshot email sent successfully!');
+        console.log('Message ID:', result.data.id);
+
+        res.json({
+            success: true,
+            messageId: result.data.id,
+            filename: finalFilename,
+            recipient: airbaseEmail,
+            subject: subject
+        });
+
+    } catch (error) {
+        console.error('Error sending screenshot to Airbase:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            type: 'screenshot_upload_error'
+        });
+    }
+});
+
+// Secure email monitoring endpoint
+app.post('/monitor-emails', strictLimiter, async (req, res) => {
+    try {
+        console.log('🔒 SECURE EMAIL MONITORING REQUEST');
+        
+        // Security checks
+        if (!req.session.googleTokens) {
+            console.log('❌ No authentication - monitoring denied');
+            return res.status(401).json({ 
+                success: false, 
+                error: 'Authentication required for email monitoring' 
+            });
+        }
+
+        // Rate limiting check (additional security)
+        const userSession = req.session.id || 'unknown';
+        const lastMonitorCheck = req.session.lastMonitorCheck || 0;
+        const minInterval = 5 * 60 * 1000; // 5 minutes minimum between checks
+        
+        if (Date.now() - lastMonitorCheck < minInterval) {
+            console.log('⏰ Rate limit: Too frequent monitoring requests');
+            return res.status(429).json({
+                success: false,
+                error: 'Monitoring requests too frequent. Please wait.'
+            });
+        }
+
+        const { since, maxEmails = 10, securityMode = false } = req.body;
+        
+        // Security validation
+        if (maxEmails > 50) {
+            return res.status(400).json({
+                success: false,
+                error: 'Email limit too high for security'
+            });
+        }
+
+        console.log('📧 Secure email monitoring parameters:', {
+            since: new Date(since).toISOString(),
+            maxEmails,
+            securityMode
+        });
+
+        // Configure Gmail client
+        oauth2Client.setCredentials(req.session.googleTokens);
+        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+        // Build secure search query
+        const sinceDate = new Date(since);
+        const formattedDate = sinceDate.toISOString().split('T')[0].replace(/-/g, '/');
+        
+        const secureQuery = [
+            `after:${formattedDate}`,
+            '(from:amazon.com OR from:uber.com OR from:doordash.com OR subject:receipt OR subject:invoice)',
+            '-label:spam',
+            '-label:trash'
+        ].join(' ');
+
+        console.log('🔍 Secure search query:', secureQuery);
+
+        // Search for receipt emails (server-side only)
+        const searchResponse = await gmail.users.messages.list({
+            userId: 'me',
+            q: secureQuery,
+            maxResults: maxEmails
+        });
+
+        const emails = searchResponse.data.messages || [];
+        console.log(`📨 Found ${emails.length} potential receipts`);
+
+        let processedCount = 0;
+        const results = [];
+
+        // Process each email securely
+        for (const email of emails) {
+            try {
+                // Get email metadata only (not full content initially)
+                const emailData = await gmail.users.messages.get({
+                    userId: 'me',
+                    id: email.id,
+                    format: 'metadata'
+                });
+
+                // Extract headers securely
+                const headers = emailData.data.payload.headers;
+                const from = headers.find(h => h.name.toLowerCase() === 'from')?.value || '';
+                const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
+                const date = headers.find(h => h.name.toLowerCase() === 'date')?.value || '';
+
+                console.log(`📧 Analyzing: ${subject.substring(0, 50)}... from ${from.substring(0, 30)}`);
+
+                // Quick AI analysis for security (minimal data exposure)
+                const quickAnalysis = await analyzeEmailWithAI('', subject, from);
+                
+                if (quickAnalysis.isReceipt && quickAnalysis.confidence > 0.7) {
+                    // Only process high-confidence receipts
+                    
+                    // Get full email content for processing
+                    const fullEmailData = await gmail.users.messages.get({
+                        userId: 'me',
+                        id: email.id,
+                        format: 'raw'
+                    });
+
+                    const rawEmail = fullEmailData.data.raw;
+                    const emailBuffer = Buffer.from(rawEmail, 'base64');
+                    const emailContent = emailBuffer.toString();
+
+                    // Process with AI enhancement
+                    const enhancedAnalysis = await analyzeEmailWithAI(emailContent, subject, from);
+                    
+                    if (enhancedAnalysis.shouldChunk && enhancedAnalysis.amounts.length > 1) {
+                        // Process chunked emails
+                        const chunkingDecision = await intelligentChunkingDecision(
+                            emailContent, 
+                            enhancedAnalysis.amounts, 
+                            enhancedAnalysis.vendor
+                        );
+
+                        for (const amount of chunkingDecision.amountsToProcess) {
+                            const chunkedEmail = createAIEnhancedChunkedEmail(
+                                emailContent,
+                                amount,
+                                enhancedAnalysis.vendor,
+                                'Automated monitoring with AI analysis'
+                            );
+
+                            await sendEmailToAirbase(chunkedEmail, gmail);
+                            processedCount++;
+                        }
+                    } else {
+                        // Process as single email
+                        await forwardEmailToAirbase(email.id, gmail);
+                        processedCount++;
+                    }
+
+                    results.push({
+                        emailId: email.id,
+                        subject: subject.substring(0, 50),
+                        processed: true,
+                        vendor: enhancedAnalysis.vendor
+                    });
+
+                } else {
+                    console.log(`⏭️ Skipping non-receipt: ${subject.substring(0, 50)} (confidence: ${quickAnalysis.confidence})`);
+                }
+
+            } catch (emailError) {
+                console.error(`❌ Failed to process email ${email.id}:`, emailError);
+                results.push({
+                    emailId: email.id,
+                    processed: false,
+                    error: 'Processing failed'
+                });
+            }
+        }
+
+        // Update session tracking
+        req.session.lastMonitorCheck = Date.now();
+
+        console.log(`✅ Secure monitoring complete: ${processedCount} receipts processed`);
+
+        res.json({
+            success: true,
+            processedCount,
+            totalChecked: emails.length,
+            results: securityMode ? [] : results, // Don't return detailed results in security mode
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('❌ Secure email monitoring error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Email monitoring failed',
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Send email to Airbase (helper for monitoring)
+async function sendEmailToAirbase(emailContent, gmail) {
+    const encodedEmail = Buffer.from(emailContent).toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+    return await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: { raw: encodedEmail }
+    });
+}
+
+// Forward email to Airbase (helper for monitoring)
+async function forwardEmailToAirbase(emailId, gmail) {
+    // Get the original email
+    const messageDetails = await gmail.users.messages.get({
+        userId: 'me',
+        id: emailId,
+        format: 'raw'
+    });
+
+    const rawEmail = messageDetails.data.raw;
+    const emailBuffer = Buffer.from(rawEmail, 'base64');
+    const emailContent = emailBuffer.toString();
+
+    // Modify headers for Airbase
+    const lines = emailContent.split('\n');
+    const newLines = [];
+    let inHeaders = true;
+
+    for (const line of lines) {
+        if (inHeaders && line.trim() === '') {
+            newLines.push('To: adrienne.caffarel-sourcegraph@airbase.com');
+            newLines.push('');
+            inHeaders = false;
+            continue;
+        }
+
+        if (inHeaders) {
+            if (line.toLowerCase().startsWith('to:')) {
+                newLines.push('To: adrienne.caffarel-sourcegraph@airbase.com');
+            } else if (!line.toLowerCase().startsWith('bcc:') && 
+                      !line.toLowerCase().startsWith('cc:')) {
+                newLines.push(line);
+            }
+        } else {
+            newLines.push(line);
+        }
+    }
+
+    const modifiedEmail = newLines.join('\n');
+    return await sendEmailToAirbase(modifiedEmail, gmail);
+}
+
+// Authentication status endpoint (for background monitoring)
+app.get('/auth/status', (req, res) => {
+    res.json({
+        authenticated: !!req.session.googleTokens,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Test endpoint for screenshot functionality (development only)
+if (!isProduction) {
+    app.post('/test-screenshot-validation', (req, res) => {
+        try {
+            const { imageData } = req.body;
+            console.log('Testing screenshot validation...');
+            
+            const validatedImage = validateImageData(imageData);
+            const filename = generateScreenshotFilename(null, imageData, {});
+            
+            res.json({
+                success: true,
+                validation: {
+                    mimeType: validatedImage.mimeType,
+                    sizeKB: Math.round(validatedImage.sizeInBytes / 1024),
+                    filename: filename
+                },
+                message: 'Image validation successful'
+            });
+        } catch (error) {
+            res.status(400).json({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    // Test endpoint for AI email analysis
+    app.post('/test-ai-analysis', async (req, res) => {
+        try {
+            const { emailContent, emailSubject, emailFrom } = req.body;
+            console.log('Testing AI email analysis...');
+            
+            const aiAnalysis = await analyzeEmailWithAI(emailContent, emailSubject, emailFrom);
+            
+            res.json({
+                success: true,
+                analysis: aiAnalysis,
+                hasOpenAI: !!OPENAI_API_KEY,
+                message: 'AI analysis complete'
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+}
 
 // Send PDF receipt to Airbase inbox via Gmail (legacy - can be removed)
 app.post('/send-to-airbase', async (req, res) => {
