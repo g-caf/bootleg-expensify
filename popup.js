@@ -1649,15 +1649,31 @@ class ExpenseGadget {
 
     async startEmailMonitoring() {
         try {
+            console.log('🔄 Attempting to start email monitoring...');
+            
+            // Check if background script is available
+            if (!chrome.runtime) {
+                throw new Error('Chrome runtime not available');
+            }
+            
             const response = await chrome.runtime.sendMessage({ action: 'startMonitoring' });
-            if (response.success) {
+            console.log('📧 Background response:', response);
+            
+            if (response && response.success) {
                 this.showStatus('📧 Email monitoring started - receipts will be processed automatically');
                 const status = await this.getMonitoringStatus();
                 this.updateMonitoringUI(status);
+            } else {
+                throw new Error(response?.message || 'Unknown error starting monitoring');
             }
         } catch (error) {
-            console.error('Failed to start monitoring:', error);
-            this.showStatus('❌ Failed to start email monitoring');
+            console.error('❌ Failed to start monitoring:', error);
+            this.showStatus(`❌ Failed to start email monitoring: ${error.message}`);
+            
+            // Fallback: Show instructions for manual reload
+            if (error.message.includes('runtime') || error.message.includes('receiving')) {
+                this.showStatus('🔄 Please reload the extension in chrome://extensions and try again');
+            }
         }
     }
 

@@ -237,15 +237,40 @@ const secureMonitor = new SecureEmailMonitor();
 
 // Handle messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'startMonitoring') {
-        secureMonitor.startMonitoring().then(sendResponse);
-        return true; // Async response
-    } else if (request.action === 'stopMonitoring') {
-        secureMonitor.stopMonitoring().then(sendResponse);
-        return true;
-    } else if (request.action === 'getMonitoringStatus') {
-        secureMonitor.getMonitoringStatus().then(sendResponse);
-        return true;
+    console.log('📨 Background received message:', request.action);
+    
+    try {
+        if (request.action === 'startMonitoring') {
+            secureMonitor.startMonitoring()
+                .then(sendResponse)
+                .catch(error => {
+                    console.error('❌ Start monitoring error:', error);
+                    sendResponse({ success: false, message: error.message });
+                });
+            return true; // Async response
+        } else if (request.action === 'stopMonitoring') {
+            secureMonitor.stopMonitoring()
+                .then(sendResponse)
+                .catch(error => {
+                    console.error('❌ Stop monitoring error:', error);
+                    sendResponse({ success: false, message: error.message });
+                });
+            return true;
+        } else if (request.action === 'getMonitoringStatus') {
+            secureMonitor.getMonitoringStatus()
+                .then(sendResponse)
+                .catch(error => {
+                    console.error('❌ Get status error:', error);
+                    sendResponse({ active: false, error: error.message });
+                });
+            return true;
+        } else {
+            console.log('❓ Unknown action:', request.action);
+            sendResponse({ success: false, message: 'Unknown action' });
+        }
+    } catch (error) {
+        console.error('❌ Message handler error:', error);
+        sendResponse({ success: false, message: error.message });
     }
 });
 
