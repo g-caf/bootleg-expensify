@@ -109,7 +109,7 @@ class SecureEmailMonitor {
         }
     }
 
-    async requestServerEmailCheck(since) {
+    async requestServerEmailCheck(since, isCatchup = false) {
         try {
             const response = await fetch('https://bootleg-expensify.onrender.com/monitor-emails', {
                 method: 'POST',
@@ -122,12 +122,22 @@ class SecureEmailMonitor {
                 body: JSON.stringify({
                     since: since,
                     maxEmails: SECURITY_CONFIG.MAX_EMAILS_PER_CHECK,
-                    securityMode: true
+                    securityMode: true,
+                    isCatchup: isCatchup
                 })
             });
 
             if (response.ok) {
                 return await response.json();
+            } else if (response.status === 429) {
+                // Handle rate limiting specifically
+                const errorData = await response.json();
+                return { 
+                    success: false, 
+                    processedCount: 0,
+                    error: errorData.error,
+                    waitTime: errorData.waitTime
+                };
             } else {
                 throw new Error(`Server check failed: ${response.status}`);
             }
@@ -271,8 +281,8 @@ class SecureEmailMonitor {
             
             console.log(`📧 Catching up emails since: ${new Date(catchupFrom).toLocaleString()}`);
             
-            // Call server-side email check with catchup timestamp
-            const checkResult = await this.requestServerEmailCheck(catchupFrom);
+            // Call server-side email check with catchup flag
+            const checkResult = await this.requestServerEmailCheck(catchupFrom, true);
             
             if (checkResult.success) {
                 console.log(`📧 Catchup processed ${checkResult.processedCount} receipts`);
@@ -290,7 +300,11 @@ class SecureEmailMonitor {
                     message: `Processed ${checkResult.processedCount} receipts`
                 };
             } else {
-                return { success: false, message: 'Server check failed' };
+                return { 
+                    success: false, 
+                    message: checkResult.error || 'Server check failed',
+                    waitTime: checkResult.waitTime
+                };
             }
 
         } catch (error) {

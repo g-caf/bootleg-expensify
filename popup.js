@@ -1834,7 +1834,12 @@ class ExpenseGadget {
                 }
                 this.showStatus(message);
             } else {
-                throw new Error(response?.message || 'Catchup failed');
+                const errorMsg = response?.message || 'Catchup failed';
+                if (response?.waitTime) {
+                    throw new Error(`${errorMsg} (wait ${response.waitTime}s)`);
+                } else {
+                    throw new Error(errorMsg);
+                }
             }
         } catch (error) {
             console.error('❌ Catchup failed:', error);

@@ -3441,13 +3441,18 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         // Rate limiting check (additional security)
         const userSession = req.session.id || 'unknown';
         const lastMonitorCheck = req.session.lastMonitorCheck || 0;
-        const minInterval = 5 * 60 * 1000; // 5 minutes minimum between checks
+        const { isCatchup = false } = req.body;
+        
+        // Different rate limits for different operations
+        const minInterval = isCatchup ? (30 * 1000) : (2 * 60 * 1000); // 30s for catchup, 2min for regular monitoring
         
         if (Date.now() - lastMonitorCheck < minInterval) {
-            console.log('⏰ Rate limit: Too frequent monitoring requests');
+            const waitTime = Math.ceil((minInterval - (Date.now() - lastMonitorCheck)) / 1000);
+            console.log(`⏰ Rate limit: Too frequent monitoring requests (wait ${waitTime}s)`);
             return res.status(429).json({
                 success: false,
-                error: 'Monitoring requests too frequent. Please wait.'
+                error: `Please wait ${waitTime} seconds before trying again`,
+                waitTime: waitTime
             });
         }
 
