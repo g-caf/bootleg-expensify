@@ -57,44 +57,53 @@ class GmailClient {
 
     async getTokenFromServer() {
         try {
+            console.log('🔐 DEBUG: Fetching token from server...');
             const response = await fetch('https://bootleg-expensify-34h3.onrender.com/auth/token', {
                 credentials: 'include'
             });
+            console.log('🔐 DEBUG: Server response status:', response.status);
             if (response.ok) {
                 const data = await response.json();
+                console.log('🔐 DEBUG: Server response data keys:', Object.keys(data));
+                console.log('🔐 DEBUG: Has access_token:', !!data.access_token);
                 return data.access_token;
+            } else {
+                console.log('🔐 DEBUG: Server response not ok:', response.status, response.statusText);
+                const errorText = await response.text();
+                console.log('🔐 DEBUG: Error response body:', errorText);
             }
         } catch (error) {
-            // Ignore errors, we're just checking
+            console.error('🔐 DEBUG: Error fetching token from server:', error);
         }
         return null;
     }
 
     async checkStoredAuth() {
         try {
-            console.log('GmailClient: checkStoredAuth started');
+            console.log('🔐 DEBUG: GmailClient checkStoredAuth started');
 
             // ONLY trust server token - don't use stored tokens
             // This prevents client/server auth state mismatch
             const serverToken = await this.getTokenFromServer();
-            console.log('GmailClient: serverToken result:', serverToken ? 'token received' : 'no token');
+            console.log('🔐 DEBUG: GmailClient serverToken result:', serverToken ? 'token received' : 'no token');
+            console.log('🔐 DEBUG: Server token preview:', serverToken ? serverToken.substring(0, 20) + '...' : 'null');
 
             if (serverToken) {
                 this.accessToken = serverToken;
                 this.isAuthenticated = true;
                 await chrome.storage.local.set({ gmailAccessToken: serverToken });
-                console.log('GmailClient: authenticated via server token');
+                console.log('🔐 DEBUG: GmailClient authenticated via server token');
                 return true;
             } else {
                 // Server says not authenticated - clear any stale local data
-                console.log('GmailClient: server not authenticated, clearing local storage');
+                console.log('🔐 DEBUG: GmailClient server not authenticated, clearing local storage');
                 await chrome.storage.local.remove(['gmailAccessToken']);
                 this.accessToken = null;
                 this.isAuthenticated = false;
                 return false;
             }
         } catch (error) {
-            console.error('Error checking stored auth:', error);
+            console.error('🔐 DEBUG: Error checking stored auth:', error);
             // Clear stale data on error
             await chrome.storage.local.remove(['gmailAccessToken']);
             this.accessToken = null;
@@ -860,14 +869,14 @@ class ExpenseGadget {
                 this.updateGmailAuthStatus(false);
                 return false;
             }
-            console.log('Checking Gmail authentication...');
+            console.log('🔐 DEBUG: Checking Gmail authentication...');
             const isAuthenticated = await this.gmailClient.checkStoredAuth();
-            console.log('Gmail authentication result:', isAuthenticated);
+            console.log('🔐 DEBUG: Gmail authentication result:', isAuthenticated);
             this.updateGmailAuthStatus(isAuthenticated);
-            console.log('Updated Gmail auth status in UI');
+            console.log('🔐 DEBUG: Updated Gmail auth status in UI');
             return isAuthenticated;
         } catch (error) {
-            console.error('Error checking Gmail auth:', error);
+            console.error('🔐 DEBUG: Error checking Gmail auth:', error);
             this.updateGmailAuthStatus(false);
             return false;
         }
