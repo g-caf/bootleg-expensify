@@ -57,7 +57,7 @@ class GmailClient {
 
     async getTokenFromServer() {
         try {
-            const response = await fetch('https://bootleg-expensify.onrender.com/auth/token', {
+            const response = await fetch('https://bootleg-expensify-34h3.onrender.com/auth/token', {
                 credentials: 'include'
             });
             if (response.ok) {
@@ -796,7 +796,7 @@ class ExpenseGadget {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per file
 
-            const response = await fetch('https://bootleg-expensify.onrender.com/parse-receipt', {
+            const response = await fetch('https://bootleg-expensify-34h3.onrender.com/parse-receipt', {
                 method: 'POST',
                 body: formData,
                 signal: controller.signal
@@ -1022,7 +1022,7 @@ class ExpenseGadget {
 
     connectGoogleDrive() {
         // Open Google authentication in new tab
-        const authUrl = 'https://bootleg-expensify.onrender.com/auth/google';
+        const authUrl = 'https://bootleg-expensify-34h3.onrender.com/auth/google';
         window.open(authUrl, '_blank', 'width=500,height=600');
 
         // Check Gmail auth status periodically to see when authentication completes
@@ -1216,7 +1216,7 @@ class ExpenseGadget {
         gmailScanBtn.textContent = 'Scanning...';
 
         try {
-            const response = await fetch('https://bootleg-expensify.onrender.com/scan-gmail', {
+            const response = await fetch('https://bootleg-expensify-34h3.onrender.com/scan-gmail', {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
@@ -1284,7 +1284,7 @@ class ExpenseGadget {
                 pollCount++;
                 console.log(`Polling scan ${scanId} (attempt ${pollCount})`);
                 
-                const response = await fetch(`https://bootleg-expensify.onrender.com/scan-status/${scanId}`, {
+                const response = await fetch(`https://bootleg-expensify-34h3.onrender.com/scan-status/${scanId}`, {
                     method: 'GET',
                     credentials: 'include'
                 });
@@ -1526,7 +1526,7 @@ class ExpenseGadget {
                 requestBody.airbaseAmounts = airbaseAmounts;
             }
             
-            const response = await fetch('https://bootleg-expensify.onrender.com/forward-to-airbase', {
+            const response = await fetch('https://bootleg-expensify-34h3.onrender.com/forward-to-airbase', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1957,7 +1957,7 @@ class ExpenseGadget {
             processBtn.disabled = true;
 
             // Send image to backend for processing
-            const response = await fetch('https://bootleg-expensify.onrender.com/extract-transactions', {
+            const response = await fetch('https://bootleg-expensify-34h3.onrender.com/extract-transactions', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

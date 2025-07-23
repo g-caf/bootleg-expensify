@@ -9,7 +9,7 @@ class GmailClient {
         try {
             // Use the existing server-side Google OAuth flow
             // This will open the same auth flow that's used for Google Drive
-            const authUrl = 'https://bootleg-expensify.onrender.com/auth/google';
+            const authUrl = 'https://bootleg-expensify-34h3.onrender.com/auth/google';
             window.open(authUrl, '_blank', 'width=500,height=600');
             
             // Check for authentication status periodically
@@ -39,7 +39,7 @@ class GmailClient {
 
     async getTokenFromServer() {
         try {
-            const response = await fetch('https://bootleg-expensify.onrender.com/auth/token', {
+            const response = await fetch('https://bootleg-expensify-34h3.onrender.com/auth/token', {
                 credentials: 'include'
             });
             if (response.ok) {

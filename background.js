@@ -89,7 +89,7 @@ class SecureEmailMonitor {
     async checkAuthStatus() {
         try {
             // Check server-side auth status (don't store tokens in extension)
-            const response = await fetch('https://bootleg-expensify.onrender.com/auth/status', {
+            const response = await fetch('https://bootleg-expensify-34h3.onrender.com/auth/status', {
                 method: 'GET',
                 credentials: 'include', // Use HTTP-only cookies for auth
                 headers: {
@@ -111,7 +111,7 @@ class SecureEmailMonitor {
 
     async requestServerEmailCheck(since, isCatchup = false, maxEmails = null) {
         try {
-            const response = await fetch('https://bootleg-expensify.onrender.com/monitor-emails', {
+            const response = await fetch('https://bootleg-expensify-34h3.onrender.com/monitor-emails', {
                 method: 'POST',
                 credentials: 'include',
                 headers: {

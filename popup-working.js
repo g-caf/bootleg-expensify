@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Scan button clicked');
             if (scanBtn.textContent === 'Connect to Google') {
                 // Open auth window
-                const authUrl = 'https://bootleg-expensify.onrender.com/auth/google';
+                const authUrl = 'https://bootleg-expensify-34h3.onrender.com/auth/google';
                 window.open(authUrl, '_blank', 'width=500,height=600');
             }
         });
