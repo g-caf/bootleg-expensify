@@ -3427,9 +3427,14 @@ app.post('/send-screenshot-to-airbase', strictLimiter, async (req, res) => {
 // Secure email monitoring endpoint
 app.post('/monitor-emails', strictLimiter, async (req, res) => {
     try {
-        console.log('🔒 SECURE EMAIL MONITORING REQUEST');
+        console.log('🔒 SECURE EMAIL MONITORING REQUEST - STARTING');
+        console.log('📊 Request body:', JSON.stringify(req.body, null, 2));
         
         // Security checks
+        console.log('🔐 Checking authentication...');
+        console.log('📋 Session exists:', !!req.session);
+        console.log('🔑 Google tokens exist:', !!req.session.googleTokens);
+        
         if (!req.session.googleTokens) {
             console.log('❌ No authentication - monitoring denied');
             return res.status(401).json({ 
@@ -3437,6 +3442,8 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
                 error: 'Authentication required for email monitoring' 
             });
         }
+        
+        console.log('✅ Authentication check passed');
 
         // Rate limiting check (additional security)
         const userSession = req.session.id || 'unknown';
@@ -3445,6 +3452,9 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         
         // Different rate limits for different operations
         const minInterval = isCatchup ? (30 * 1000) : (2 * 60 * 1000); // 30s for catchup, 2min for regular monitoring
+        
+        console.log('⏰ Rate limiting check...');
+        console.log('📊 Last check:', lastMonitorCheck, 'Min interval:', minInterval, 'Time since:', Date.now() - lastMonitorCheck);
         
         if (Date.now() - lastMonitorCheck < minInterval) {
             const waitTime = Math.ceil((minInterval - (Date.now() - lastMonitorCheck)) / 1000);
@@ -3455,6 +3465,8 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
                 waitTime: waitTime
             });
         }
+        
+        console.log('✅ Rate limiting check passed');
 
         const { since, maxEmails = 10, securityMode = false } = req.body;
         
@@ -3473,8 +3485,10 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         });
 
         // Configure Gmail client
+        console.log('📧 Configuring Gmail client...');
         oauth2Client.setCredentials(req.session.googleTokens);
         const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+        console.log('✅ Gmail client configured');
 
         // Build secure search query
         const sinceDate = new Date(since);
