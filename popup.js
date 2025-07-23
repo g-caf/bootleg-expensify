@@ -894,11 +894,19 @@ class ExpenseGadget {
         // Enable search functionality if Gmail is authenticated
         const searchInput = document.getElementById('searchInput');
         if (searchInput) {
+            console.log('Search input before update - disabled:', searchInput.disabled, 'placeholder:', searchInput.placeholder);
             searchInput.disabled = !isAuthenticated;
             searchInput.placeholder = isAuthenticated
                 ? 'Search your email for receipts...'
                 : 'Connect to Google to enable search';
-            console.log('Updated search input. Disabled:', !isAuthenticated, 'Placeholder:', searchInput.placeholder);
+            console.log('Search input after update - disabled:', searchInput.disabled, 'placeholder:', searchInput.placeholder);
+            
+            // Force enable for debugging - remove this later
+            if (!isAuthenticated) {
+                console.log('⚠️ DEBUGGING: Force-enabling search input despite not authenticated');
+                searchInput.disabled = false;
+                searchInput.placeholder = 'Search (debug mode - may not work)...';
+            }
         }
 
         // Update scan button based on authentication status

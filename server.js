@@ -3482,7 +3482,7 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         
         const secureQuery = [
             `after:${formattedDate}`,
-            '(from:amazon.com OR from:uber.com OR from:doordash.com OR subject:receipt OR subject:invoice)',
+            '(from:amazon.com OR from:uber.com OR from:doordash.com OR from:noreply@doordash.com OR from:receipt@doordash.com OR subject:receipt OR subject:invoice OR subject:"your order" OR subject:"order confirmation")',
             '-label:spam',
             '-label:trash'
         ].join(' ');
@@ -3498,6 +3498,14 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
 
         const emails = searchResponse.data.messages || [];
         console.log(`📨 Found ${emails.length} potential receipts`);
+        
+        // Debug: Log first few email IDs to help with troubleshooting
+        if (emails.length > 0) {
+            console.log('📋 Email IDs found:', emails.slice(0, 5).map(e => e.id));
+        } else {
+            console.log('❌ No emails found with query:', secureQuery);
+            console.log('📅 Search date range: since', new Date(since).toISOString());
+        }
 
         let processedCount = 0;
         const results = [];
