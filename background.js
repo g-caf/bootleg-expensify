@@ -6,7 +6,7 @@ const SECURITY_CONFIG = {
     MAX_STORED_IDS: 100,           // Limit stored email IDs
     CLEANUP_INTERVAL_HOURS: 24,    // Clear old data every 24 hours
     CHECK_INTERVAL_MINUTES: 10,    // Check emails every 10 minutes (not too frequent)
-    MAX_EMAILS_PER_CHECK: 20,      // Process max 20 emails per check
+    MAX_EMAILS_PER_CHECK: 100,     // Process max 100 emails per check (increased from 20)
     SESSION_TIMEOUT_MINUTES: 60    // Clear session data after 60 minutes
 };
 
@@ -109,7 +109,7 @@ class SecureEmailMonitor {
         }
     }
 
-    async requestServerEmailCheck(since, isCatchup = false) {
+    async requestServerEmailCheck(since, isCatchup = false, maxEmails = null) {
         try {
             const response = await fetch('https://bootleg-expensify.onrender.com/monitor-emails', {
                 method: 'POST',
@@ -121,7 +121,7 @@ class SecureEmailMonitor {
                 },
                 body: JSON.stringify({
                     since: since,
-                    maxEmails: SECURITY_CONFIG.MAX_EMAILS_PER_CHECK,
+                    maxEmails: maxEmails || SECURITY_CONFIG.MAX_EMAILS_PER_CHECK,
                     securityMode: true,
                     isCatchup: isCatchup
                 })
@@ -258,7 +258,7 @@ class SecureEmailMonitor {
         }
     }
 
-    async catchupEmails(hoursBack = null) {
+    async catchupEmails(hoursBack = null, maxEmails = 100) {
         console.log('🔄 Starting email catchup...');
         
         try {
@@ -281,8 +281,8 @@ class SecureEmailMonitor {
             
             console.log(`📧 Catching up emails since: ${new Date(catchupFrom).toLocaleString()}`);
             
-            // Call server-side email check with catchup flag
-            const checkResult = await this.requestServerEmailCheck(catchupFrom, true);
+            // Call server-side email check with catchup flag and higher limit
+            const checkResult = await this.requestServerEmailCheck(catchupFrom, true, maxEmails);
             
             if (checkResult.success) {
                 console.log(`📧 Catchup processed ${checkResult.processedCount} receipts`);
@@ -347,7 +347,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 });
             return true;
         } else if (request.action === 'catchupEmails') {
-            secureMonitor.catchupEmails(request.hoursBack)
+            secureMonitor.catchupEmails(request.hoursBack, request.maxEmails)
                 .then(sendResponse)
                 .catch(error => {
                     console.error('❌ Catchup error:', error);

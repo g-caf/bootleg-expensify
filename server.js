@@ -3458,11 +3458,11 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
 
         const { since, maxEmails = 10, securityMode = false } = req.body;
         
-        // Security validation
-        if (maxEmails > 50) {
+        // Security validation - increased limit since we're just checking emails
+        if (maxEmails > 500) {
             return res.status(400).json({
                 success: false,
-                error: 'Email limit too high for security'
+                error: 'Email limit too high (max 500 per request)'
             });
         }
 
@@ -3489,14 +3489,37 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
 
         console.log('🔍 Secure search query:', secureQuery);
 
-        // Search for receipt emails (server-side only)
-        const searchResponse = await gmail.users.messages.list({
-            userId: 'me',
-            q: secureQuery,
-            maxResults: maxEmails
-        });
+        // Search for receipt emails with pagination support
+        let allEmails = [];
+        let pageToken = null;
+        let emailsToFetch = maxEmails;
+        
+        // For catchup operations, we might need multiple pages
+        while (emailsToFetch > 0) {
+            const batchSize = Math.min(emailsToFetch, 100); // Gmail API max per request
+            
+            const searchResponse = await gmail.users.messages.list({
+                userId: 'me',
+                q: secureQuery,
+                maxResults: batchSize,
+                pageToken: pageToken
+            });
 
-        const emails = searchResponse.data.messages || [];
+            const batchEmails = searchResponse.data.messages || [];
+            allEmails = allEmails.concat(batchEmails);
+            
+            console.log(`📨 Fetched batch of ${batchEmails.length} emails (total: ${allEmails.length})`);
+            
+            pageToken = searchResponse.data.nextPageToken;
+            emailsToFetch -= batchEmails.length;
+            
+            // Stop if no more emails or no next page
+            if (!pageToken || batchEmails.length === 0) {
+                break;
+            }
+        }
+
+        const emails = allEmails;
         console.log(`📨 Found ${emails.length} potential receipts`);
         
         // Debug: Log first few email IDs to help with troubleshooting

@@ -1831,7 +1831,8 @@ class ExpenseGadget {
             
             const response = await chrome.runtime.sendMessage({ 
                 action: 'catchupEmails', 
-                hoursBack: hoursBack 
+                hoursBack: hoursBack,
+                maxEmails: hoursBack ? 200 : 100  // Higher limit for time-based catchup
             });
             
             if (response && response.success) {
