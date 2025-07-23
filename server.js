@@ -3480,6 +3480,15 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         const sinceDate = new Date(since);
         const formattedDate = sinceDate.toISOString().split('T')[0].replace(/-/g, '/');
         
+        console.log('📅 DEBUG: Search date range - since:', sinceDate.toISOString(), 'formatted:', formattedDate);
+        
+        // TEMPORARY: Add debug search with broader query to see what we're missing
+        const debugBroadQuery = [
+            `after:${formattedDate}`,
+            '-label:spam',
+            '-label:trash'
+        ].join(' ');
+        
         const secureQuery = [
             `after:${formattedDate}`,
             '(from:amazon.com OR from:uber.com OR from:doordash.com OR from:noreply@doordash.com OR from:receipt@doordash.com OR subject:receipt OR subject:invoice OR subject:"your order" OR subject:"order confirmation")',
@@ -3488,6 +3497,84 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         ].join(' ');
 
         console.log('🔍 Secure search query:', secureQuery);
+        console.log('🔍 DEBUG: Running broad search first to see what we might be missing...');
+
+        // TEMPORARY DEBUG: Run broad search to see all emails in date range
+        try {
+            const debugResponse = await gmail.users.messages.list({
+                userId: 'me',
+                q: debugBroadQuery,
+                maxResults: 50
+            });
+            
+            const debugEmails = debugResponse.data.messages || [];
+            console.log(`🔍 DEBUG: Found ${debugEmails.length} total emails in date range`);
+            
+            // Get details for first 10 emails to see what we're working with
+            for (let i = 0; i < Math.min(10, debugEmails.length); i++) {
+                try {
+                    const emailData = await gmail.users.messages.get({
+                        userId: 'me',
+                        id: debugEmails[i].id,
+                        format: 'metadata'
+                    });
+                    
+                    const headers = emailData.data.payload.headers;
+                    const from = headers.find(h => h.name.toLowerCase() === 'from')?.value || 'No sender';
+                    const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value || 'No subject';
+                    const date = headers.find(h => h.name.toLowerCase() === 'date')?.value || 'No date';
+                    
+                    console.log(`📧 DEBUG Email ${i+1}:`);
+                    console.log(`   From: ${from}`);
+                    console.log(`   Subject: ${subject}`);
+                    console.log(`   Date: ${date}`);
+                    console.log(`   ID: ${debugEmails[i].id}`);
+                } catch (emailError) {
+                    console.log(`❌ DEBUG: Error getting email ${i+1}:`, emailError.message);
+                }
+            }
+        } catch (debugError) {
+            console.log('❌ DEBUG: Broad search failed:', debugError.message);
+        }
+
+        // TEMPORARY DEBUG: Specific DoorDash search to see if we can find those emails
+        try {
+            const doordashQuery = `after:${formattedDate} doordash -label:spam -label:trash`;
+            console.log('🔍 DEBUG: DoorDash specific search:', doordashQuery);
+            
+            const doordashResponse = await gmail.users.messages.list({
+                userId: 'me',
+                q: doordashQuery,
+                maxResults: 20
+            });
+            
+            const doordashEmails = doordashResponse.data.messages || [];
+            console.log(`🍔 DEBUG: Found ${doordashEmails.length} DoorDash-related emails`);
+            
+            for (let i = 0; i < Math.min(5, doordashEmails.length); i++) {
+                try {
+                    const emailData = await gmail.users.messages.get({
+                        userId: 'me',
+                        id: doordashEmails[i].id,
+                        format: 'metadata'
+                    });
+                    
+                    const headers = emailData.data.payload.headers;
+                    const from = headers.find(h => h.name.toLowerCase() === 'from')?.value || 'No sender';
+                    const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value || 'No subject';
+                    const date = headers.find(h => h.name.toLowerCase() === 'date')?.value || 'No date';
+                    
+                    console.log(`🍔 DEBUG DoorDash Email ${i+1}:`);
+                    console.log(`   From: ${from}`);
+                    console.log(`   Subject: ${subject}`);
+                    console.log(`   Date: ${date}`);
+                } catch (emailError) {
+                    console.log(`❌ DEBUG: Error getting DoorDash email ${i+1}:`, emailError.message);
+                }
+            }
+        } catch (doordashError) {
+            console.log('❌ DEBUG: DoorDash search failed:', doordashError.message);
+        }
 
         // Search for receipt emails with pagination support
         let allEmails = [];
