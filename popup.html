@@ -690,6 +690,32 @@
             <button class="scan-btn" id="gmailScanBtn" disabled>Connect to Google</button>
         </div>
         
+        <!-- Email monitoring interface (initially hidden) -->
+        <div class="date-range-container" id="monitoringContainer" style="display: none;">
+            <div class="range-header">
+                <label>Email Monitoring:</label>
+                <span id="monitoringStatus">Stopped</span>
+            </div>
+            
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <button id="startMonitoringBtn" class="scan-btn" style="flex: 1; font-size: 12px;">Start</button>
+                <button id="stopMonitoringBtn" class="scan-btn" style="flex: 1; font-size: 12px; background: #6b7280;">Stop</button>
+            </div>
+            
+            <div class="range-header" style="margin-top: 8px; margin-bottom: 4px;">
+                <label>Process Missed Emails:</label>
+            </div>
+            
+            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                <button id="catchup24h" class="clear-btn" style="flex: 1; min-width: 70px; font-size: 10px;">Last 24h</button>
+                <button id="catchup3d" class="clear-btn" style="flex: 1; min-width: 70px; font-size: 10px;">Last 3d</button>
+                <button id="catchup1w" class="clear-btn" style="flex: 1; min-width: 70px; font-size: 10px;">Last week</button>
+                <button id="catchupSinceStop" class="clear-btn" style="flex: 1; min-width: 70px; font-size: 10px;">Since stop</button>
+            </div>
+            
+            <div class="autoscan-results" id="monitoringResults" style="display: none; margin-top: 8px;"></div>
+        </div>
+        
         <!-- Autoscan interface (initially hidden) -->
         <div class="date-range-container" id="autoscanContainer" style="display: none;">
             <div class="range-header">

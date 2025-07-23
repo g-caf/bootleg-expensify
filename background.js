@@ -209,6 +209,11 @@ class SecureEmailMonitor {
     async stopMonitoring() {
         console.log('⏹️ Stopping email monitoring...');
         
+        // Store when monitoring stopped for catchup functionality
+        await chrome.storage.local.set({
+            lastMonitoringStop: Date.now()
+        });
+        
         // Clear alarms
         chrome.alarms.clear('secureEmailCheck');
         chrome.alarms.clear('securityCleanup');
@@ -223,12 +228,75 @@ class SecureEmailMonitor {
         const alarms = await chrome.alarms.getAll();
         const isActive = alarms.some(alarm => alarm.name === 'secureEmailCheck');
         const lastCheck = await this.getLastCheckTime();
+        const lastStop = await this.getLastStopTime();
         
         return {
             active: isActive,
             lastCheck: new Date(lastCheck).toLocaleString(),
+            lastStop: lastStop ? new Date(lastStop).toLocaleString() : null,
             nextCheck: isActive ? 'In ' + SECURITY_CONFIG.CHECK_INTERVAL_MINUTES + ' minutes' : 'Not scheduled'
         };
+    }
+
+    async getLastStopTime() {
+        try {
+            const result = await chrome.storage.local.get(['lastMonitoringStop']);
+            return result.lastMonitoringStop || null;
+        } catch (error) {
+            console.error('Failed to get last stop time:', error);
+            return null;
+        }
+    }
+
+    async catchupEmails(hoursBack = null) {
+        console.log('🔄 Starting email catchup...');
+        
+        try {
+            // Check if user is authenticated
+            const authStatus = await this.checkAuthStatus();
+            if (!authStatus.authenticated) {
+                console.log('🔐 User not authenticated, cannot catchup');
+                return { success: false, message: 'Not authenticated' };
+            }
+
+            let catchupFrom;
+            if (hoursBack) {
+                // Use specified hours back
+                catchupFrom = Date.now() - (hoursBack * 60 * 60 * 1000);
+            } else {
+                // Use last monitoring stop time, or default to 24 hours ago
+                const lastStop = await this.getLastStopTime();
+                catchupFrom = lastStop || (Date.now() - (24 * 60 * 60 * 1000));
+            }
+            
+            console.log(`📧 Catching up emails since: ${new Date(catchupFrom).toLocaleString()}`);
+            
+            // Call server-side email check with catchup timestamp
+            const checkResult = await this.requestServerEmailCheck(catchupFrom);
+            
+            if (checkResult.success) {
+                console.log(`📧 Catchup processed ${checkResult.processedCount} receipts`);
+                
+                // Show notification
+                if (checkResult.processedCount > 0) {
+                    this.showSecureNotification(
+                        `🔄 Catchup complete: ${checkResult.processedCount} receipts sent to Airbase`
+                    );
+                }
+                
+                return { 
+                    success: true, 
+                    processedCount: checkResult.processedCount,
+                    message: `Processed ${checkResult.processedCount} receipts`
+                };
+            } else {
+                return { success: false, message: 'Server check failed' };
+            }
+
+        } catch (error) {
+            console.error('❌ Email catchup failed:', error);
+            return { success: false, message: error.message };
+        }
     }
 }
 
@@ -262,6 +330,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 .catch(error => {
                     console.error('❌ Get status error:', error);
                     sendResponse({ active: false, error: error.message });
+                });
+            return true;
+        } else if (request.action === 'catchupEmails') {
+            secureMonitor.catchupEmails(request.hoursBack)
+                .then(sendResponse)
+                .catch(error => {
+                    console.error('❌ Catchup error:', error);
+                    sendResponse({ success: false, message: error.message });
                 });
             return true;
         } else {

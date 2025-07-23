@@ -613,10 +613,28 @@ class ExpenseGadget {
                     console.log('Connecting to Google...');
                     // Handle connection
                     await this.connectGoogleDrive();
+                } else if (gmailScanBtn.textContent === 'Monitoring') {
+                    console.log('Cycling through monitoring modes...');
+                    // Cycle between monitoring and autoscan
+                    const monitoringContainer = document.getElementById('monitoringContainer');
+                    const autoscanContainer = document.getElementById('autoscanContainer');
+                    
+                    if (monitoringContainer && monitoringContainer.style.display === 'block') {
+                        // Switch to autoscan
+                        gmailScanBtn.textContent = 'Autoscan';
+                        this.showAutoscanInterface();
+                    } else if (autoscanContainer && autoscanContainer.style.display === 'block') {
+                        // Back to monitoring
+                        gmailScanBtn.textContent = 'Monitoring';
+                        this.showMonitoringInterface();
+                    } else {
+                        // Default to monitoring
+                        this.showMonitoringInterface();
+                    }
                 } else if (gmailScanBtn.textContent === 'Autoscan') {
-                    console.log('Showing autoscan interface...');
-                    // Show autoscan interface
-                    this.showAutoscanInterface();
+                    console.log('Cycling back to monitoring...');
+                    gmailScanBtn.textContent = 'Monitoring';
+                    this.showMonitoringInterface();
                 } else {
                     console.log('Unknown button state:', gmailScanBtn.textContent);
                 }
@@ -887,10 +905,10 @@ class ExpenseGadget {
         const gmailScanBtn = document.getElementById('gmailScanBtn');
         if (gmailScanBtn) {
             if (isAuthenticated) {
-                gmailScanBtn.textContent = 'Autoscan';
+                gmailScanBtn.textContent = 'Monitoring';
                 gmailScanBtn.className = 'scan-btn';
                 gmailScanBtn.disabled = false;
-                console.log('Set button to authenticated state: "Autoscan"');
+                console.log('Set button to authenticated state: "Monitoring"');
             } else {
                 gmailScanBtn.textContent = 'Connect to Google';
                 gmailScanBtn.className = 'scan-btn connect';
@@ -901,11 +919,11 @@ class ExpenseGadget {
             console.error('Gmail scan button not found!');
         }
 
-        // Initialize autoscan functionality when authenticated
-        if (isAuthenticated && !this.autoscanInitialized) {
+        // Initialize monitoring functionality when authenticated
+        if (isAuthenticated && !this.monitoringInitialized) {
+            this.initializeEmailMonitoring();
             this.initializeAutoscan();
-            this.initializeEmailMonitoring(); // Add secure email monitoring
-            this.autoscanInitialized = true;
+            this.monitoringInitialized = true;
         }
     }
 
@@ -1607,8 +1625,40 @@ class ExpenseGadget {
         }
     }
 
+    showMonitoringInterface() {
+        console.log('=== SHOW MONITORING INTERFACE ===');
+        
+        // Hide search results and autoscan if any
+        const searchResults = document.getElementById('searchResults');
+        if (searchResults) {
+            searchResults.innerHTML = '';
+        }
+        
+        const autoscanContainer = document.getElementById('autoscanContainer');
+        if (autoscanContainer) {
+            autoscanContainer.style.display = 'none';
+        }
+        
+        const monitoringContainer = document.getElementById('monitoringContainer');
+        if (monitoringContainer) {
+            monitoringContainer.style.display = 'block';
+            setTimeout(() => monitoringContainer.classList.add('show'), 50);
+            console.log('Set monitoring container display to block and added show class');
+        }
+        
+        // Update monitoring status
+        this.updateMonitoringStatus();
+    }
+
     showAutoscanInterface() {
         console.log('=== SHOW AUTOSCAN INTERFACE ===');
+        
+        // Hide monitoring container
+        const monitoringContainer = document.getElementById('monitoringContainer');
+        if (monitoringContainer) {
+            monitoringContainer.style.display = 'none';
+        }
+        
         // Show the autoscan container
         const autoscanContainer = document.getElementById('autoscanContainer');
         console.log('autoscanContainer:', autoscanContainer);
@@ -1635,6 +1685,46 @@ class ExpenseGadget {
         
         // Set up monitoring controls
         this.setupMonitoringControls();
+    }
+
+    setupMonitoringControls() {
+        // Start monitoring button
+        const startBtn = document.getElementById('startMonitoringBtn');
+        if (startBtn) {
+            startBtn.addEventListener('click', () => this.startEmailMonitoring());
+        }
+
+        // Stop monitoring button
+        const stopBtn = document.getElementById('stopMonitoringBtn');
+        if (stopBtn) {
+            stopBtn.addEventListener('click', () => this.stopEmailMonitoring());
+        }
+
+        // Catchup buttons
+        const catchup24h = document.getElementById('catchup24h');
+        if (catchup24h) {
+            catchup24h.addEventListener('click', () => this.catchupEmails(24));
+        }
+
+        const catchup3d = document.getElementById('catchup3d');
+        if (catchup3d) {
+            catchup3d.addEventListener('click', () => this.catchupEmails(72));
+        }
+
+        const catchup1w = document.getElementById('catchup1w');
+        if (catchup1w) {
+            catchup1w.addEventListener('click', () => this.catchupEmails(168));
+        }
+
+        const catchupSinceStop = document.getElementById('catchupSinceStop');
+        if (catchupSinceStop) {
+            catchupSinceStop.addEventListener('click', () => this.catchupEmails());
+        }
+    }
+
+    async updateMonitoringStatus() {
+        const status = await this.getMonitoringStatus();
+        this.updateMonitoringUI(status);
     }
 
     async getMonitoringStatus() {
@@ -1692,41 +1782,69 @@ class ExpenseGadget {
     }
 
     updateMonitoringUI(status) {
-        const autoscanStatus = document.getElementById('autoscanStatus');
-        const gmailScanBtn = document.getElementById('gmailScanBtn');
+        const monitoringStatus = document.getElementById('monitoringStatus');
+        const startBtn = document.getElementById('startMonitoringBtn');
+        const stopBtn = document.getElementById('stopMonitoringBtn');
         
-        if (status.active) {
-            if (autoscanStatus) {
-                autoscanStatus.textContent = `📧 Monitoring active (last: ${status.lastCheck})`;
-                autoscanStatus.style.color = '#10b981';
+        if (monitoringStatus) {
+            if (status.active) {
+                monitoringStatus.textContent = `Active (last: ${status.lastCheck})`;
+                monitoringStatus.style.color = '#10b981';
+            } else {
+                monitoringStatus.textContent = 'Stopped';
+                monitoringStatus.style.color = '#ef4444';
+                if (status.lastStop) {
+                    monitoringStatus.textContent += ` (${status.lastStop})`;
+                }
             }
-            if (gmailScanBtn && gmailScanBtn.textContent !== 'Stop Monitoring') {
-                gmailScanBtn.textContent = 'Stop Monitoring';
-                gmailScanBtn.style.background = '#ef4444';
-            }
-        } else {
-            if (autoscanStatus) {
-                autoscanStatus.textContent = 'Start email monitoring';
-                autoscanStatus.style.color = '#9ca3af';
-            }
-            if (gmailScanBtn && gmailScanBtn.textContent !== 'Start Monitoring') {
-                gmailScanBtn.textContent = 'Start Monitoring';
-                gmailScanBtn.style.background = '#f44e40';
-            }
+        }
+        
+        // Update button states
+        if (startBtn) {
+            startBtn.disabled = status.active;
+            startBtn.style.opacity = status.active ? '0.5' : '1';
+        }
+        
+        if (stopBtn) {
+            stopBtn.disabled = !status.active;
+            stopBtn.style.opacity = !status.active ? '0.5' : '1';
         }
     }
 
-    setupMonitoringControls() {
-        const gmailScanBtn = document.getElementById('gmailScanBtn');
-        if (gmailScanBtn) {
-            gmailScanBtn.addEventListener('click', async () => {
-                const status = await this.getMonitoringStatus();
-                if (status.active) {
-                    await this.stopEmailMonitoring();
-                } else {
-                    await this.startEmailMonitoring();
-                }
+    async catchupEmails(hoursBack = null) {
+        try {
+            console.log(`🔄 Starting email catchup (${hoursBack ? hoursBack + ' hours' : 'since last stop'})...`);
+            
+            const monitoringResults = document.getElementById('monitoringResults');
+            if (monitoringResults) {
+                monitoringResults.style.display = 'block';
+                monitoringResults.innerHTML = '🔄 Processing missed emails...';
+            }
+            
+            const response = await chrome.runtime.sendMessage({ 
+                action: 'catchupEmails', 
+                hoursBack: hoursBack 
             });
+            
+            if (response && response.success) {
+                const message = `✅ Catchup complete: ${response.processedCount} receipts processed`;
+                if (monitoringResults) {
+                    monitoringResults.innerHTML = message;
+                    monitoringResults.style.color = '#10b981';
+                }
+                this.showStatus(message);
+            } else {
+                throw new Error(response?.message || 'Catchup failed');
+            }
+        } catch (error) {
+            console.error('❌ Catchup failed:', error);
+            const monitoringResults = document.getElementById('monitoringResults');
+            if (monitoringResults) {
+                monitoringResults.style.display = 'block';
+                monitoringResults.innerHTML = `❌ Catchup failed: ${error.message}`;
+                monitoringResults.style.color = '#ef4444';
+            }
+            this.showStatus(`❌ Email catchup failed: ${error.message}`);
         }
     }
 
