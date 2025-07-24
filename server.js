@@ -122,7 +122,7 @@ console.log('Auth token endpoint available at /auth/token');
 const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI || 'https://bootleg-expensify.onrender.com/auth/google/callback'
+    process.env.GOOGLE_REDIRECT_URI || 'https://bootleg-expensify-34h3.onrender.com/auth/google/callback'
 );
 
 // Session configuration - warn if no proper secret but don't crash
