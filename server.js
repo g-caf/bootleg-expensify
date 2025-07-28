@@ -241,6 +241,67 @@ function sanitizeError(error) {
 
 
 
+// Fast keyword-based receipt detection (no AI needed)
+function isDefinitelyReceipt(subject, from) {
+    const subjectLower = subject.toLowerCase();
+    const fromLower = from.toLowerCase();
+    
+    // Obvious receipt keywords in subject
+    const receiptKeywords = [
+        'receipt', 'invoice', 'your order', 'order confirmation', 
+        'purchase confirmation', 'payment confirmation', 'transaction receipt'
+    ];
+    
+    // Obvious receipt senders
+    const receiptSenders = [
+        'amazon.com', 'uber.com', 'doordash.com', 'grubhub.com', 
+        'instacart.com', 'starbucks.com', 'target.com', 'walmart.com'
+    ];
+    
+    // If subject contains obvious receipt words
+    if (receiptKeywords.some(keyword => subjectLower.includes(keyword))) {
+        return true;
+    }
+    
+    // If from obvious receipt sender and mentions money/order
+    if (receiptSenders.some(sender => fromLower.includes(sender))) {
+        const moneyWords = ['$', 'total', 'order', 'purchase', 'charged', 'paid'];
+        if (moneyWords.some(word => subjectLower.includes(word))) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+function isDefinitelyNotReceipt(subject, from) {
+    const subjectLower = subject.toLowerCase();
+    const fromLower = from.toLowerCase();
+    
+    // Obvious non-receipt keywords
+    const nonReceiptKeywords = [
+        'newsletter', 'unsubscribe', 'marketing', 'promotion', 'deal',
+        'sale', 'offer', 'coupon', 'notification', 'reminder', 'update',
+        'shipped', 'delivery update', 'tracking', 'delivered'
+    ];
+    
+    // Obvious non-receipt senders
+    const nonReceiptSenders = [
+        'marketing', 'noreply', 'no-reply', 'newsletter', 'support'
+    ];
+    
+    // Check for obvious non-receipt patterns
+    if (nonReceiptKeywords.some(keyword => subjectLower.includes(keyword))) {
+        return true;
+    }
+    
+    if (nonReceiptSenders.some(sender => fromLower.includes(sender))) {
+        return true;
+    }
+    
+    return false;
+}
+
 // Extract vendor from text (simplified fallback)
 function extractVendor(text) {
     console.log('  Extracting vendor from text (fallback)...');
@@ -3741,12 +3802,27 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
 
                 console.log(`📧 Analyzing: ${subject.substring(0, 50)}... from ${from.substring(0, 30)}`);
 
-                // Quick AI analysis for security (minimal data exposure)
-                const quickAnalysis = await analyzeEmailWithAI('', subject, from);
+                // Fast keyword-based filtering first
+                const isObviousReceipt = isDefinitelyReceipt(subject, from);
+                const isObviousNonReceipt = isDefinitelyNotReceipt(subject, from);
                 
-                console.log(`🤖 AI Analysis: isReceipt=${quickAnalysis.isReceipt}, confidence=${quickAnalysis.confidence}`);
+                let shouldProcess = false;
                 
-                if (quickAnalysis.isReceipt && quickAnalysis.confidence > 0.5) {
+                if (isObviousReceipt) {
+                    console.log(`✅ Obvious receipt - processing without AI`);
+                    shouldProcess = true;
+                } else if (isObviousNonReceipt) {
+                    console.log(`⏭️ Obviously not receipt - skipping`);
+                    shouldProcess = false;
+                } else {
+                    // Only use AI for unclear cases
+                    console.log(`🤖 Unclear case - using AI analysis`);
+                    const quickAnalysis = await analyzeEmailWithAI('', subject, from);
+                    console.log(`🤖 AI Analysis: isReceipt=${quickAnalysis.isReceipt}, confidence=${quickAnalysis.confidence}`);
+                    shouldProcess = quickAnalysis.isReceipt && quickAnalysis.confidence > 0.5;
+                }
+                
+                if (shouldProcess) {
                     // Only process high-confidence receipts
                     
                     // Get full email content for processing
