@@ -3532,11 +3532,11 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
 
         const { since, maxEmails = 10, securityMode = false } = req.body;
         
-        // Security validation - reasonable limits to prevent timeouts
-        if (maxEmails > 50) {
+        // Security validation - higher limit for catchup operations
+        if (maxEmails > 500) {
             return res.status(400).json({
                 success: false,
-                error: 'Email limit too high (max 50 per request for performance)'
+                error: 'Email limit too high (max 500 per request)'
             });
         }
 
