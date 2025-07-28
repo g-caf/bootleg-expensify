@@ -254,8 +254,9 @@ function isDefinitelyReceipt(subject, from) {
     
     // Obvious receipt senders
     const receiptSenders = [
-        'amazon.com', 'uber.com', 'doordash.com', 'grubhub.com', 
-        'instacart.com', 'starbucks.com', 'target.com', 'walmart.com'
+        'amazon.com', 'amazon', 'uber.com', 'doordash.com', 'grubhub.com', 
+        'instacart.com', 'starbucks.com', 'target.com', 'walmart.com',
+        'auto-confirm@amazon.com', 'shipment-tracking@amazon.com'
     ];
     
     // If subject contains obvious receipt words
@@ -265,8 +266,12 @@ function isDefinitelyReceipt(subject, from) {
     
     // If from obvious receipt sender and mentions money/order
     if (receiptSenders.some(sender => fromLower.includes(sender))) {
-        const moneyWords = ['$', 'total', 'order', 'purchase', 'charged', 'paid'];
+        const moneyWords = ['$', 'total', 'order', 'purchase', 'charged', 'paid', 'shipped', 'delivered'];
         if (moneyWords.some(word => subjectLower.includes(word))) {
+            return true;
+        }
+        // Amazon-specific patterns
+        if (fromLower.includes('amazon') && (subjectLower.includes('order') || subjectLower.includes('shipment'))) {
             return true;
         }
     }
@@ -3888,12 +3893,23 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         // Update session tracking
         req.session.lastMonitorCheck = Date.now();
 
-        console.log(`✅ Secure monitoring complete: ${processedCount} receipts processed`);
+        console.log(`✅ Secure monitoring complete: ${processedCount} receipts processed out of ${emails.length} emails analyzed`);
 
+        // Summary logging
+        const processedEmails = results.filter(r => r.processed);
+        const skippedEmails = results.filter(r => !r.processed);
+        
+        console.log(`📊 SUMMARY:`);
+        console.log(`   📧 Emails found by Gmail search: ${emails.length}`);
+        console.log(`   ✅ Emails processed: ${processedCount}`);
+        console.log(`   ⏭️ Emails skipped: ${skippedEmails.length}`);
+        
         res.json({
             success: true,
             processedCount,
+            message: `Processed ${processedCount} receipts out of ${emails.length} emails found`,
             totalChecked: emails.length,
+            emailsSkipped: skippedEmails.length,
             results: securityMode ? [] : results, // Don't return detailed results in security mode
             timestamp: new Date().toISOString()
         });
