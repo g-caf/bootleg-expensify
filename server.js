@@ -3542,7 +3542,10 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         
         console.log('✅ Rate limiting check passed');
 
-        const { since, maxEmails = 10, securityMode = false } = req.body;
+        const { since, maxEmails = 10, securityMode = false, isCatchup = false } = req.body;
+        
+        // Limit catchup to prevent timeouts
+        const effectiveLimit = isCatchup ? Math.min(maxEmails, 20) : maxEmails;
         
         // Security validation - higher limit for catchup operations
         if (maxEmails > 500) {
@@ -3555,7 +3558,9 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         console.log('📧 Secure email monitoring parameters:', {
             since: new Date(since).toISOString(),
             maxEmails,
-            securityMode
+            effectiveLimit,
+            securityMode,
+            isCatchup
         });
 
         // Configure Gmail client
@@ -3668,7 +3673,7 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         // Search for receipt emails with pagination support
         let allEmails = [];
         let pageToken = null;
-        let emailsToFetch = maxEmails;
+        let emailsToFetch = effectiveLimit;
         
         // For catchup operations, we might need multiple pages
         while (emailsToFetch > 0) {
@@ -3709,8 +3714,17 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         let processedCount = 0;
         const results = [];
 
-        // Process each email securely
+        // Process each email securely with timeout protection
+        const startTime = Date.now();
+        const maxProcessingTime = 45000; // 45 seconds max
+        
         for (const email of emails) {
+            // Check if we're running out of time
+            if (Date.now() - startTime > maxProcessingTime) {
+                console.log(`⏰ Processing timeout reached, stopping after ${processedCount} emails`);
+                break;
+            }
+            
             try {
                 // Get email metadata only (not full content initially)
                 const emailData = await gmail.users.messages.get({
