@@ -3532,11 +3532,11 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
 
         const { since, maxEmails = 10, securityMode = false } = req.body;
         
-        // Security validation - increased limit since we're just checking emails
-        if (maxEmails > 500) {
+        // Security validation - reasonable limits to prevent timeouts
+        if (maxEmails > 50) {
             return res.status(400).json({
                 success: false,
-                error: 'Email limit too high (max 500 per request)'
+                error: 'Email limit too high (max 50 per request for performance)'
             });
         }
 
@@ -3565,9 +3565,10 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
             '-label:trash'
         ].join(' ');
         
-        // TEMPORARY: Much broader search to see what we can find
+        // FOCUSED: Search for receipt-related emails only
         const secureQuery = [
             `after:${formattedDate}`,
+            '(from:amazon.com OR from:uber.com OR from:doordash.com OR from:grubhub.com OR from:instacart.com OR subject:receipt OR subject:invoice OR subject:"your order")',
             '-label:spam',
             '-label:trash'
         ].join(' ');
