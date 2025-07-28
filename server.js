@@ -3603,7 +3603,7 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         
         console.log('✅ Rate limiting check passed');
 
-        const { since, maxEmails = 10, securityMode = false, isCatchup = false } = req.body;
+        const { since, maxEmails = 10, securityMode = false } = req.body;
         
         // Limit catchup to prevent timeouts
         const effectiveLimit = isCatchup ? Math.min(maxEmails, 25) : maxEmails;
