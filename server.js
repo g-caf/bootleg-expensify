@@ -3488,6 +3488,18 @@ app.post('/send-screenshot-to-airbase', strictLimiter, async (req, res) => {
 
 // Secure email monitoring endpoint
 app.post('/monitor-emails', strictLimiter, async (req, res) => {
+    // Set a 60 second timeout for the whole operation
+    const timeout = setTimeout(() => {
+        console.log('⏰ Email monitoring timed out after 60 seconds');
+        if (!res.headersSent) {
+            res.status(408).json({
+                success: false,
+                error: 'Request timed out - try with fewer emails or shorter time range',
+                processedCount: 0
+            });
+        }
+    }, 60000);
+
     try {
         console.log('🔒 SECURE EMAIL MONITORING REQUEST - STARTING');
         console.log('📊 Request body:', JSON.stringify(req.body, null, 2));
@@ -3718,7 +3730,9 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
                 // Quick AI analysis for security (minimal data exposure)
                 const quickAnalysis = await analyzeEmailWithAI('', subject, from);
                 
-                if (quickAnalysis.isReceipt && quickAnalysis.confidence > 0.7) {
+                console.log(`🤖 AI Analysis: isReceipt=${quickAnalysis.isReceipt}, confidence=${quickAnalysis.confidence}`);
+                
+                if (quickAnalysis.isReceipt && quickAnalysis.confidence > 0.5) {
                     // Only process high-confidence receipts
                     
                     // Get full email content for processing
