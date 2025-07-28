@@ -728,6 +728,68 @@ app.get('/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint to test authentication without making actual Gmail calls
+app.get('/debug/auth', (req, res) => {
+    console.log('🔍 DEBUG AUTH CHECK');
+    console.log('📋 Session exists:', !!req.session);
+    console.log('🔑 Google tokens exist:', !!req.session?.googleTokens);
+    console.log('📊 Session ID:', req.session?.id || 'none');
+    
+    if (req.session?.googleTokens) {
+        console.log('🔐 Token type:', req.session.googleTokens.token_type || 'unknown');
+        console.log('⏰ Token expires:', req.session.googleTokens.expiry_date ? new Date(req.session.googleTokens.expiry_date).toISOString() : 'unknown');
+    }
+    
+    res.json({
+        authenticated: !!req.session?.googleTokens,
+        sessionExists: !!req.session,
+        sessionId: req.session?.id || null,
+        tokenExists: !!req.session?.googleTokens,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Debug endpoint to test Gmail API connection
+app.get('/debug/gmail-test', async (req, res) => {
+    try {
+        if (!req.session?.googleTokens) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+        
+        console.log('🔍 Testing Gmail API connection...');
+        oauth2Client.setCredentials(req.session.googleTokens);
+        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+        
+        // Simple test: get user profile
+        const profile = await gmail.users.getProfile({ userId: 'me' });
+        console.log('✅ Gmail API working, email:', profile.data.emailAddress);
+        
+        // Test a basic search
+        const testSearch = await gmail.users.messages.list({
+            userId: 'me',
+            maxResults: 5
+        });
+        
+        console.log(`📧 Test search found ${testSearch.data.messages?.length || 0} recent emails`);
+        
+        res.json({
+            success: true,
+            emailAddress: profile.data.emailAddress,
+            messagesInMailbox: profile.data.messagesTotal,
+            recentEmailsFound: testSearch.data.messages?.length || 0,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Gmail API test failed:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 // Debug endpoint to check processed emails
 app.get('/debug/processed-emails', requireDebugAuth, (req, res) => {
     res.json({
@@ -3503,9 +3565,9 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
             '-label:trash'
         ].join(' ');
         
+        // TEMPORARY: Much broader search to see what we can find
         const secureQuery = [
             `after:${formattedDate}`,
-            '(from:amazon.com OR from:uber.com OR from:doordash.com OR from:noreply@doordash.com OR from:receipt@doordash.com OR subject:receipt OR subject:invoice OR subject:"your order" OR subject:"order confirmation")',
             '-label:spam',
             '-label:trash'
         ].join(' ');
