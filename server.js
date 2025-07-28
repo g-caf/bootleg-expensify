@@ -3545,7 +3545,7 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         const { since, maxEmails = 10, securityMode = false, isCatchup = false } = req.body;
         
         // Limit catchup to prevent timeouts
-        const effectiveLimit = isCatchup ? Math.min(maxEmails, 20) : maxEmails;
+        const effectiveLimit = isCatchup ? Math.min(maxEmails, 25) : maxEmails;
         
         // Security validation - higher limit for catchup operations
         if (maxEmails > 500) {
