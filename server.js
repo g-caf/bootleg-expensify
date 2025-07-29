@@ -251,8 +251,8 @@ function isDefinitelyReceipt(subject, from) {
         'receipt', 'invoice', 'your order', 'order confirmation', 
         'purchase confirmation', 'payment confirmation', 'transaction receipt',
         'booking confirmation', 'reservation confirmed', 'payment received',
-        'order placed', 'order shipped', 'order delivered', 'delivery confirmation',
-        'thanks for your order', 'order summary', 'purchase summary'
+        'order placed', 'thanks for your order', 'order summary', 'purchase summary',
+        'your amazon.com order', 'order placed:', 'your order of'
     ];
     
     // Obvious receipt senders 
@@ -297,7 +297,9 @@ function isDefinitelyNotReceipt(subject, from) {
         'password reset', 'account notification', 'security alert',
         'shipped', 'delivery update', 'tracking', 'delivered', 'out for delivery',
         'package delivered', 'shipment notification', 'tracking number',
-        'has shipped', 'will arrive', 'on the way', 'delivery confirmation'
+        'has shipped', 'will arrive', 'on the way', 'delivery confirmation',
+        'delivered:', 'your package was delivered', 'package delivered',
+        'delivery attempted', 'delivery scheduled'
     ];
     
     // Obvious non-receipt senders
