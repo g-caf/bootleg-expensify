@@ -290,11 +290,13 @@ function isDefinitelyNotReceipt(subject, from) {
     const subjectLower = subject.toLowerCase();
     const fromLower = from.toLowerCase();
     
-    // Obvious non-receipt keywords (made more conservative)
+    // Obvious non-receipt keywords (avoid duplicates)
     const nonReceiptKeywords = [
         'newsletter', 'unsubscribe', 'marketing', 'weekly digest',
         'sale alert', 'deal alert', 'coupon expires', 'reminder:',
-        'password reset', 'account notification', 'security alert'
+        'password reset', 'account notification', 'security alert',
+        'shipped', 'delivery update', 'tracking', 'delivered', 'out for delivery',
+        'package delivered', 'shipment notification', 'tracking number'
     ];
     
     // Obvious non-receipt senders
