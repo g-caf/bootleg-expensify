@@ -255,11 +255,12 @@ function isDefinitelyReceipt(subject, from) {
         'thanks for your order', 'order summary', 'purchase summary'
     ];
     
-    // Obvious receipt senders (much expanded)
+    // Obvious receipt senders (much expanded, especially Amazon)
     const receiptSenders = [
-        'amazon.com', 'amazon', 'uber.com', 'doordash.com', 'grubhub.com', 
-        'instacart.com', 'starbucks.com', 'target.com', 'walmart.com',
-        'auto-confirm@amazon.com', 'shipment-tracking@amazon.com',
+        'amazon.com', 'amazon', 'auto-confirm@amazon', 'ship-confirm@amazon', 
+        'order-update@amazon', 'payment@amazon', 'digital-no-reply@amazon',
+        'uber.com', 'doordash.com', 'grubhub.com', 'instacart.com', 
+        'starbucks.com', 'target.com', 'walmart.com',
         'airbnb.com', 'airbnb', 'booking.com', 'expedia', 'hotels.com',
         'paypal.com', 'stripe.com', 'square', 'venmo.com',
         'apple.com', 'google.com', 'microsoft.com', 'adobe.com',
@@ -3794,6 +3795,27 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
 
         const emails = allEmails;
         console.log(`📨 Found ${emails.length} potential receipts`);
+        
+        // DEBUGGING: Log ALL emails found by Gmail search (first 10)
+        console.log(`🔍 GMAIL SEARCH RESULTS (first 10 of ${emails.length}):`);
+        for (let i = 0; i < Math.min(10, emails.length); i++) {
+            try {
+                const emailData = await gmail.users.messages.get({
+                    userId: 'me',
+                    id: emails[i].id,
+                    format: 'metadata'
+                });
+                
+                const headers = emailData.data.payload.headers;
+                const from = headers.find(h => h.name.toLowerCase() === 'from')?.value || 'No sender';
+                const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value || 'No subject';
+                
+                console.log(`   ${i+1}. Subject: "${subject.substring(0, 60)}..."`);
+                console.log(`      From: "${from.substring(0, 50)}..."`);
+            } catch (e) {
+                console.log(`   ${i+1}. Error getting email details: ${e.message}`);
+            }
+        }
         
         // Debug: Log first few email IDs to help with troubleshooting
         if (emails.length > 0) {
