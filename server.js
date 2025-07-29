@@ -3678,6 +3678,7 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         const secureQuery = [
             `after:${formattedDate}`,
             '(has:attachment OR subject:receipt OR subject:invoice OR subject:order OR subject:confirmation OR subject:payment OR subject:booking OR $ OR from:no-reply)',
+            '-in:sent',  // Exclude our own forwarded emails to Airbase
             '-label:spam',
             '-label:trash',
             '-subject:newsletter',
