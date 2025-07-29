@@ -1764,7 +1764,7 @@ class ExpenseGadget {
             console.log('📧 Background response:', response);
             
             if (response && response.success) {
-                this.showStatus('📧 Email monitoring started - receipts will be processed automatically');
+                // Remove overlay - monitoring status change is obvious from UI
                 const status = await this.getMonitoringStatus();
                 this.updateMonitoringUI(status);
             } else {
@@ -1785,7 +1785,7 @@ class ExpenseGadget {
         try {
             const response = await chrome.runtime.sendMessage({ action: 'stopMonitoring' });
             if (response.success) {
-                this.showStatus('⏹️ Email monitoring stopped');
+                // Remove overlay - monitoring status change is obvious from UI
                 const status = await this.getMonitoringStatus();
                 this.updateMonitoringUI(status);
             }
