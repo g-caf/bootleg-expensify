@@ -3843,6 +3843,12 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
                 break;
             }
             
+            // Skip emails we've already processed
+            if (processedEmailIds.has(email.id)) {
+                console.log(`⏭️ Skipping already processed email: ${email.id}`);
+                continue;
+            }
+            
             try {
                 // Get email metadata only (not full content initially)
                 const emailData = await gmail.users.messages.get({
@@ -3925,6 +3931,10 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
                         // Process as single email
                         await forwardEmailToAirbase(email.id, gmail);
                         processedCount++;
+                        
+                        // Mark as processed to avoid duplicates
+                        processedEmailIds.add(email.id);
+                        saveProcessedEmails(processedEmailIds);
                     }
 
                     results.push({
