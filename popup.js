@@ -1815,7 +1815,6 @@ class ExpenseGadget {
                     hour12: true 
                 });
                 monitoringStatus.textContent = `Active (last: ${formattedDate})`;
-                monitoringStatus.style.color = '#ffffff';
             } else {
                 monitoringStatus.textContent = 'Stopped';
                 monitoringStatus.style.color = '#ef4444';
