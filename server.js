@@ -246,17 +246,24 @@ function isDefinitelyReceipt(subject, from) {
     const subjectLower = subject.toLowerCase();
     const fromLower = from.toLowerCase();
     
-    // Obvious receipt keywords in subject
+    // Obvious receipt keywords in subject (expanded)
     const receiptKeywords = [
         'receipt', 'invoice', 'your order', 'order confirmation', 
-        'purchase confirmation', 'payment confirmation', 'transaction receipt'
+        'purchase confirmation', 'payment confirmation', 'transaction receipt',
+        'booking confirmation', 'reservation confirmed', 'payment received',
+        'order placed', 'order shipped', 'order delivered', 'delivery confirmation',
+        'thanks for your order', 'order summary', 'purchase summary'
     ];
     
-    // Obvious receipt senders
+    // Obvious receipt senders (much expanded)
     const receiptSenders = [
         'amazon.com', 'amazon', 'uber.com', 'doordash.com', 'grubhub.com', 
         'instacart.com', 'starbucks.com', 'target.com', 'walmart.com',
-        'auto-confirm@amazon.com', 'shipment-tracking@amazon.com'
+        'auto-confirm@amazon.com', 'shipment-tracking@amazon.com',
+        'airbnb.com', 'airbnb', 'booking.com', 'expedia', 'hotels.com',
+        'paypal.com', 'stripe.com', 'square', 'venmo.com',
+        'apple.com', 'google.com', 'microsoft.com', 'adobe.com',
+        'netflix.com', 'spotify.com', 'zoom.us'
     ];
     
     // If subject contains obvious receipt words
@@ -283,11 +290,11 @@ function isDefinitelyNotReceipt(subject, from) {
     const subjectLower = subject.toLowerCase();
     const fromLower = from.toLowerCase();
     
-    // Obvious non-receipt keywords
+    // Obvious non-receipt keywords (made more conservative)
     const nonReceiptKeywords = [
-        'newsletter', 'unsubscribe', 'marketing', 'promotion', 'deal',
-        'sale', 'offer', 'coupon', 'notification', 'reminder', 'update',
-        'shipped', 'delivery update', 'tracking', 'delivered'
+        'newsletter', 'unsubscribe', 'marketing', 'weekly digest',
+        'sale alert', 'deal alert', 'coupon expires', 'reminder:',
+        'password reset', 'account notification', 'security alert'
     ];
     
     // Obvious non-receipt senders
@@ -3815,13 +3822,19 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
                 
                 if (isObviousReceipt) {
                     console.log(`✅ Obvious receipt - processing without AI`);
+                    console.log(`   📋 Subject: ${subject.substring(0, 60)}`);
+                    console.log(`   📤 From: ${from.substring(0, 40)}`);
                     shouldProcess = true;
                 } else if (isObviousNonReceipt) {
                     console.log(`⏭️ Obviously not receipt - skipping`);
+                    console.log(`   📋 Subject: ${subject.substring(0, 60)}`);
+                    console.log(`   📤 From: ${from.substring(0, 40)}`);
                     shouldProcess = false;
                 } else {
                     // Only use AI for unclear cases
                     console.log(`🤖 Unclear case - using AI analysis`);
+                    console.log(`   📋 Subject: ${subject.substring(0, 60)}`);
+                    console.log(`   📤 From: ${from.substring(0, 40)}`);
                     const quickAnalysis = await analyzeEmailWithAI('', subject, from);
                     console.log(`🤖 AI Analysis: isReceipt=${quickAnalysis.isReceipt}, confidence=${quickAnalysis.confidence}`);
                     shouldProcess = quickAnalysis.isReceipt && quickAnalysis.confidence > 0.5;
