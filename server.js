@@ -2674,31 +2674,48 @@ async function analyzeEmailWithAI(emailContent, emailSubject = '', emailFrom = '
 
     try {
         const analysisPrompt = `
-Analyze this email for expense/receipt processing:
+You are an expert at identifying business expense receipts and transactions. Analyze this email:
 
 From: ${emailFrom}
 Subject: ${emailSubject}
 Content: ${emailContent.substring(0, 2000)}
 
-Return a JSON object with:
+BUSINESS EXPENSES INCLUDE:
+✅ Purchase receipts (Amazon, Target, etc.)
+✅ Service payments (Uber, Airbnb, hotels)  
+✅ Subscription charges (Netflix, Zoom, software)
+✅ Food delivery (DoorDash, Grubhub)
+✅ Professional services (consulting, contractors)
+✅ Travel bookings (flights, hotels, car rentals)
+✅ Utility bills and business services
+✅ ANY email confirming money was charged/paid
+
+NOT BUSINESS EXPENSES:
+❌ Shipping/delivery notifications (no payment info)
+❌ Marketing emails and newsletters
+❌ Account notifications and password resets
+❌ "Your order shipped" (unless it also shows charges)
+
+Return JSON:
 {
   "isReceipt": boolean,
   "confidence": number (0-1),
   "vendor": string or null,
-  "amounts": array of dollar amounts found,
+  "amounts": array of dollar amounts,
   "transactionCount": number,
   "shouldChunk": boolean,
   "category": string or null,
   "reasoning": string
 }
 
-Focus on:
-- Is this actually a receipt/invoice (not marketing/shipping updates)?
-- What dollar amounts represent actual transactions vs totals/discounts?
-- For Amazon: should this be split into multiple transaction emails?
-- What expense category might this be?
+CONFIDENCE GUIDE:
+- 0.9+: Clear payment confirmation with amount
+- 0.7-0.8: Business transaction but some ambiguity
+- 0.4-0.6: Likely business expense but unclear
+- 0.1-0.3: Probably not a receipt
+- 0.0: Definitely not a receipt
 
-Be conservative - when uncertain, set lower confidence.`;
+When in doubt about business relevance, lean toward YES with 0.4-0.6 confidence.`;
 
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -3839,7 +3856,7 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
                     console.log(`   📤 From: ${from.substring(0, 40)}`);
                     const quickAnalysis = await analyzeEmailWithAI('', subject, from);
                     console.log(`🤖 AI Analysis: isReceipt=${quickAnalysis.isReceipt}, confidence=${quickAnalysis.confidence}`);
-                    shouldProcess = quickAnalysis.isReceipt && quickAnalysis.confidence > 0.5;
+                    shouldProcess = quickAnalysis.isReceipt && quickAnalysis.confidence > 0.35;
                 }
                 
                 if (shouldProcess) {
