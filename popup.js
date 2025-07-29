@@ -1364,6 +1364,20 @@ class ExpenseGadget {
             clearTimeout(this.searchDebounceTimer);
         }
 
+        // Hide/show monitoring interface based on search state
+        const monitoringContainer = document.getElementById('monitoringContainer');
+        if (query.trim().length > 0) {
+            // Hide monitoring when searching
+            if (monitoringContainer) {
+                monitoringContainer.style.display = 'none';
+            }
+        } else {
+            // Show monitoring when search is cleared
+            if (monitoringContainer) {
+                monitoringContainer.style.display = 'block';
+            }
+        }
+
         // Debounce search to avoid too many requests
         this.searchDebounceTimer = setTimeout(() => {
             if (query.trim().length > 0) {
