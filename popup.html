@@ -160,7 +160,7 @@
         }
         
         .search-results.processing-active {
-            margin-bottom: 80px; /* Space for processing message */
+            margin-bottom: 40px; /* Reduced space for processing message */
         }
         
         .search-result-item {
@@ -422,6 +422,7 @@
             align-items: center;
             margin-bottom: 8px;
             font-size: 13px;
+            position: relative;
         }
         
         .range-header label {
@@ -432,6 +433,21 @@
         .range-header span {
             color: #f44e40;
             font-weight: 600;
+        }
+        
+        #monitoringStatus {
+            color: #ffffff !important;
+            font-size: 11px;
+            position: absolute;
+            right: 0;
+            top: 24px;
+            white-space: nowrap;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 2px 6px;
+            border-radius: 4px;
+            z-index: 10;
+            max-width: 200px;
+            text-align: right;
         }
         
         /* Dual Range Slider Styles */

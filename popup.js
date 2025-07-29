@@ -910,11 +910,10 @@ class ExpenseGadget {
                 : 'Connect to Google to enable search';
             console.log('Search input after update - disabled:', searchInput.disabled, 'placeholder:', searchInput.placeholder);
             
-            // Force enable for debugging - remove this later
-            if (!isAuthenticated) {
-                console.log('⚠️ DEBUGGING: Force-enabling search input despite not authenticated');
+            // Ensure search is enabled when authenticated
+            if (isAuthenticated) {
                 searchInput.disabled = false;
-                searchInput.placeholder = 'Search (debug mode - may not work)...';
+                searchInput.placeholder = 'Search your email for receipts...';
             }
         }
 
@@ -1805,13 +1804,32 @@ class ExpenseGadget {
         
         if (monitoringStatus) {
             if (status.active) {
-                monitoringStatus.textContent = `Active (last: ${status.lastCheck})`;
-                monitoringStatus.style.color = '#10b981';
+                // Format date more compactly: 7/28, 5:22 PM
+                const lastCheckDate = new Date(status.lastCheck);
+                const formattedDate = lastCheckDate.toLocaleDateString('en-US', { 
+                    month: 'numeric', 
+                    day: 'numeric' 
+                }) + ', ' + lastCheckDate.toLocaleTimeString('en-US', { 
+                    hour: 'numeric', 
+                    minute: '2-digit', 
+                    hour12: true 
+                });
+                monitoringStatus.textContent = `Active (last: ${formattedDate})`;
+                monitoringStatus.style.color = '#ffffff';
             } else {
                 monitoringStatus.textContent = 'Stopped';
                 monitoringStatus.style.color = '#ef4444';
                 if (status.lastStop) {
-                    monitoringStatus.textContent += ` (${status.lastStop})`;
+                    const stopDate = new Date(status.lastStop);
+                    const formattedStop = stopDate.toLocaleDateString('en-US', { 
+                        month: 'numeric', 
+                        day: 'numeric' 
+                    }) + ', ' + stopDate.toLocaleTimeString('en-US', { 
+                        hour: 'numeric', 
+                        minute: '2-digit', 
+                        hour12: true 
+                    });
+                    monitoringStatus.textContent += ` (${formattedStop})`;
                 }
             }
         }
