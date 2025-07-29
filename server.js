@@ -3636,8 +3636,8 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
 
         const { since, maxEmails = 10, securityMode = false } = req.body;
         
-        // Limit catchup to prevent timeouts
-        const effectiveLimit = isCatchup ? Math.min(maxEmails, 25) : maxEmails;
+        // Use the requested limit (no artificial cap)
+        const effectiveLimit = maxEmails;
         
         // Security validation - higher limit for catchup operations
         if (maxEmails > 500) {
@@ -3685,6 +3685,8 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
         ].join(' ');
 
         console.log('🔍 Secure search query:', secureQuery);
+        console.log('📅 Formatted date for Gmail:', formattedDate);
+        console.log('📊 Email limit for this request:', effectiveLimit);
         console.log('🔍 DEBUG: Running broad search first to see what we might be missing...');
 
         // TEMPORARY DEBUG: Run broad search to see all emails in date range
