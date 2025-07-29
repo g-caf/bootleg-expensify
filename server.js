@@ -257,7 +257,7 @@ function isDefinitelyReceipt(subject, from) {
     
     // Obvious receipt senders 
     const receiptSenders = [
-        'no-reply@amazon.com', 'amazon.com',
+        'auto-confirm@amazon.com', 'amazon.com',
         'uber.com', 'doordash.com', 'grubhub.com', 'instacart.com', 
         'starbucks.com', 'target.com', 'walmart.com',
         'airbnb.com', 'airbnb', 'booking.com', 'expedia', 'hotels.com',
@@ -296,7 +296,8 @@ function isDefinitelyNotReceipt(subject, from) {
         'sale alert', 'deal alert', 'coupon expires', 'reminder:',
         'password reset', 'account notification', 'security alert',
         'shipped', 'delivery update', 'tracking', 'delivered', 'out for delivery',
-        'package delivered', 'shipment notification', 'tracking number'
+        'package delivered', 'shipment notification', 'tracking number',
+        'has shipped', 'will arrive', 'on the way', 'delivery confirmation'
     ];
     
     // Obvious non-receipt senders
