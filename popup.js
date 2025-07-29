@@ -886,9 +886,7 @@ class ExpenseGadget {
         try {
             const success = await this.gmailClient.authenticate();
             this.updateGmailAuthStatus(success);
-            if (success) {
-                this.showStatus('✅ Gmail access granted!', 'success');
-            }
+            // Remove annoying overlay - authentication success is obvious from UI state
             return success;
         } catch (error) {
             console.error('Gmail authentication error:', error);
@@ -1865,9 +1863,10 @@ class ExpenseGadget {
                 const message = `✅ Catchup complete: ${response.processedCount} receipts processed`;
                 if (monitoringResults) {
                     monitoringResults.innerHTML = message;
-                    monitoringResults.style.color = '#10b981';
+                    monitoringResults.style.color = '#d1d5db'; // Match popup text color
+                    monitoringResults.style.textAlign = 'center'; // Center the text
                 }
-                this.showStatus(message);
+                // Remove overlay - message at bottom is sufficient
             } else {
                 const errorMsg = response?.message || 'Catchup failed';
                 if (response?.waitTime) {
@@ -1883,8 +1882,9 @@ class ExpenseGadget {
                 monitoringResults.style.display = 'block';
                 monitoringResults.innerHTML = `❌ Catchup failed: ${error.message}`;
                 monitoringResults.style.color = '#ef4444';
+                monitoringResults.style.textAlign = 'center'; // Center error messages too
             }
-            this.showStatus(`❌ Email catchup failed: ${error.message}`);
+            // Remove overlay - message at bottom is sufficient
         }
     }
 
