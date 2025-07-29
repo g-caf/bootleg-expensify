@@ -3674,12 +3674,14 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
             '-label:trash'
         ].join(' ');
         
-        // FOCUSED: Search for receipt-related emails only
+        // BROAD: Search for any potential business emails, let filtering handle the rest
         const secureQuery = [
             `after:${formattedDate}`,
-            '(from:amazon.com OR from:uber.com OR from:doordash.com OR from:grubhub.com OR from:instacart.com OR subject:receipt OR subject:invoice OR subject:"your order")',
+            '(has:attachment OR subject:receipt OR subject:invoice OR subject:order OR subject:confirmation OR subject:payment OR subject:booking OR $ OR from:no-reply)',
             '-label:spam',
-            '-label:trash'
+            '-label:trash',
+            '-subject:newsletter',
+            '-subject:unsubscribe'
         ].join(' ');
 
         console.log('🔍 Secure search query:', secureQuery);
