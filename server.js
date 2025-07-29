@@ -255,10 +255,9 @@ function isDefinitelyReceipt(subject, from) {
         'thanks for your order', 'order summary', 'purchase summary'
     ];
     
-    // Obvious receipt senders (much expanded, especially Amazon)
+    // Obvious receipt senders 
     const receiptSenders = [
-        'amazon.com', 'amazon', 'auto-confirm@amazon', 'ship-confirm@amazon', 
-        'order-update@amazon', 'payment@amazon', 'digital-no-reply@amazon',
+        'no-reply@amazon.com', 'amazon.com',
         'uber.com', 'doordash.com', 'grubhub.com', 'instacart.com', 
         'starbucks.com', 'target.com', 'walmart.com',
         'airbnb.com', 'airbnb', 'booking.com', 'expedia', 'hotels.com',
