@@ -3677,15 +3677,13 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
             '-label:trash'
         ].join(' ');
         
-        // BROAD: Search for any potential business emails, let filtering handle the rest
+        // PRECISE: Search for specific vendors and proven receipt patterns
         const secureQuery = [
             `after:${formattedDate}`,
-            '(has:attachment OR subject:receipt OR subject:invoice OR subject:order OR subject:confirmation OR subject:payment OR subject:booking OR $ OR from:no-reply)',
+            '(from:auto-confirm@amazon.com OR from:no-reply@doordash.com OR from:noreply@uber.com OR subject:"order confirmation" OR subject:"purchase confirmation" OR subject:"Ordered:" OR subject:"Your order" OR subject:"Receipt for" OR subject:"your purchase" OR subject:"your order is confirmed" OR subject:"order confirmed" OR subject:"order # confirmed")',
             '-in:sent',  // Exclude our own forwarded emails to Airbase
             '-label:spam',
-            '-label:trash',
-            '-subject:newsletter',
-            '-subject:unsubscribe'
+            '-label:trash'
         ].join(' ');
 
         console.log('🔍 Secure search query:', secureQuery);
