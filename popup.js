@@ -1817,7 +1817,7 @@ class ExpenseGadget {
                         minute: '2-digit', 
                         hour12: true 
                     });
-                    monitoringStatus.textContent += ` (${formattedStop})`;
+                    monitoringStatus.textContent = `Stopped (last: ${formattedStop})`;
                 }
             }
         }

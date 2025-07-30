@@ -3832,6 +3832,7 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
 
         let processedCount = 0;
         const results = [];
+        const seenEmailIds = new Set(); // Track emails in this sweep to prevent duplicates
 
         // Process each email securely with timeout protection
         const startTime = Date.now();
@@ -3844,11 +3845,18 @@ app.post('/monitor-emails', strictLimiter, async (req, res) => {
                 break;
             }
             
-            // Skip emails we've already processed
+            // Skip emails we've already processed (persistent cache)
             if (processedEmailIds.has(email.id)) {
                 console.log(`⏭️ Skipping already processed email: ${email.id}`);
                 continue;
             }
+            
+            // Skip emails we've seen in this sweep (prevent duplicates in same run)
+            if (seenEmailIds.has(email.id)) {
+                console.log(`🔄 Skipping duplicate email in this sweep: ${email.id}`);
+                continue;
+            }
+            seenEmailIds.add(email.id);
             
             try {
                 // Get email metadata only (not full content initially)
