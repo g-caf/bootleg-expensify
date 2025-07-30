@@ -623,26 +623,8 @@ class ExpenseGadget {
                     // Handle connection
                     await this.connectGoogleDrive();
                 } else if (gmailScanBtn.textContent === 'Monitoring') {
-                    console.log('Cycling through monitoring modes...');
-                    // Cycle between monitoring and autoscan
-                    const monitoringContainer = document.getElementById('monitoringContainer');
-                    const autoscanContainer = document.getElementById('autoscanContainer');
-                    
-                    if (monitoringContainer && monitoringContainer.style.display === 'block') {
-                        // Switch to autoscan
-                        gmailScanBtn.textContent = 'Autoscan';
-                        this.showAutoscanInterface();
-                    } else if (autoscanContainer && autoscanContainer.style.display === 'block') {
-                        // Back to monitoring
-                        gmailScanBtn.textContent = 'Monitoring';
-                        this.showMonitoringInterface();
-                    } else {
-                        // Default to monitoring
-                        this.showMonitoringInterface();
-                    }
-                } else if (gmailScanBtn.textContent === 'Autoscan') {
-                    console.log('Cycling back to monitoring...');
-                    gmailScanBtn.textContent = 'Monitoring';
+                    console.log('Monitoring button clicked - just ensure monitoring interface is shown');
+                    // Just show monitoring interface (no cycling)
                     this.showMonitoringInterface();
                 } else {
                     console.log('Unknown button state:', gmailScanBtn.textContent);
@@ -936,7 +918,7 @@ class ExpenseGadget {
         // Initialize monitoring functionality when authenticated
         if (isAuthenticated && !this.monitoringInitialized) {
             this.initializeEmailMonitoring();
-            this.initializeAutoscan();
+            // Autoscan functionality removed - using continuous monitoring instead
             this.monitoringInitialized = true;
         }
     }
@@ -1656,15 +1638,10 @@ class ExpenseGadget {
     showMonitoringInterface() {
         console.log('=== SHOW MONITORING INTERFACE ===');
         
-        // Hide search results and autoscan if any
+        // Hide search results
         const searchResults = document.getElementById('searchResults');
         if (searchResults) {
             searchResults.innerHTML = '';
-        }
-        
-        const autoscanContainer = document.getElementById('autoscanContainer');
-        if (autoscanContainer) {
-            autoscanContainer.style.display = 'none';
         }
         
         const monitoringContainer = document.getElementById('monitoringContainer');

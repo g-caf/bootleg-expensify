@@ -586,81 +586,7 @@
             text-align: center;
         }
 
-        /* Autoscan Styles */
-        .autoscan-section {
-            background: #374151;
-            border: 1px solid #4b5563;
-            border-radius: 8px;
-            padding: 10px;
-            margin-top: 8px;
-            transition: all 0.3s ease;
-            max-height: 180px;
-            overflow: visible;
-        }
 
-        .paste-area {
-            height: 90px;
-            border: 2px dashed #6b7280;
-            border-radius: 6px;
-            padding: 12px;
-            text-align: center;
-            background: #1f2937;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-
-        .paste-area:hover {
-            border-color: #9ca3af;
-            background: #374151;
-        }
-
-        .paste-area.dragover {
-            border-color: #f44e40;
-            background: #2d1b1b;
-        }
-
-        .paste-placeholder {
-            color: #9ca3af;
-            font-size: 13px;
-        }
-
-        .paste-buttons {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            margin-top: 8px;
-        }
-
-        .process-btn, .clear-btn {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .process-btn {
-            background: #f44e40;
-            color: white;
-        }
-
-        .process-btn:hover {
-            background: #dc2626;
-        }
-
-        .clear-btn {
-            background: #6b7280;
-            color: white;
-        }
-
-        .clear-btn:hover {
-            background: #9ca3af;
-        }
 
         .autoscan-results {
             margin-top: 6px;
@@ -724,31 +650,7 @@
             <div class="autoscan-results" id="monitoringResults" style="display: none; margin-top: 8px;"></div>
         </div>
         
-        <!-- Autoscan interface (initially hidden) -->
-        <div class="date-range-container" id="autoscanContainer" style="display: none;">
-            <div class="range-header">
-                <label>Autoscan:</label>
-                <span id="autoscanStatus">Drop Airbase screenshot</span>
-            </div>
-            
-            <div class="paste-area" id="pasteArea">
-                <div class="paste-placeholder" id="pastePlaceholder">
-                    📋 Drop Airbase screenshot here or Ctrl+V to paste
-                </div>
-                <div class="paste-preview" id="pastePreview" style="display: none;">
-                    <img id="previewImage" style="max-width: 100%; max-height: 70px; border-radius: 4px;" />
-                </div>
-            </div>
-            
-            <!-- Buttons outside the dotted area -->
-            <div class="paste-buttons" id="pasteButtons" style="display: none;">
-                <button id="processBtn" class="process-btn">Find Receipts</button>
-                <button id="clearBtn" class="clear-btn">Clear</button>
-            </div>
-            
-            <!-- Results area for autoscan -->
-            <div class="autoscan-results" id="autoscanResults" style="display: none;"></div>
-        </div>
+
         
         <!-- Scan results area as direct child -->
         <div class="scan-results-area" id="scanResultsArea" style="display: none;">
