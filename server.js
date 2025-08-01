@@ -125,9 +125,14 @@ const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_REDIRECT_URI || 'https://bootleg-expensify-34h3.onrender.com/auth/google/callback'
 );
 
-// Session configuration - warn if no proper secret but don't crash
+// Session configuration - fail fast in production if no proper secret
 if (!process.env.SESSION_SECRET) {
-    console.warn('⚠️  SESSION_SECRET not set - using fallback (set SESSION_SECRET for production)');
+    if (isProduction) {
+        console.error('❌ SESSION_SECRET is required in production');
+        process.exit(1);
+    } else {
+        console.warn('⚠️  SESSION_SECRET not set - using fallback (set SESSION_SECRET for production)');
+    }
 }
 
 app.use(session({
@@ -135,10 +140,10 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: false, // Temporarily disable for debugging - extensions need special handling
-        httpOnly: false, // Allow extension to access cookie
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: 'lax' // Change from 'none' to 'lax' for better compatibility
+        secure: isProduction, // Enable secure cookies in production
+        httpOnly: true, // Prevent client-side access for security
+        maxAge: 60 * 60 * 1000, // 1 hour (reduced from 24 hours)
+        sameSite: isProduction ? 'none' : 'lax' // 'none' needed for cross-origin requests in production
     }
 }));
 
@@ -157,34 +162,30 @@ app.use(cors({
     origin: (origin, callback) => {
         console.log(`🌐 CORS request from origin: ${origin || 'no origin'}`);
         
-        // TEMPORARY: Allow all origins for debugging
-        console.log(`🔧 Temporarily allowing all origins for debugging`);
-        callback(null, true);
+        // Allow requests with no origin (mobile apps, etc)
+        if (!origin) return callback(null, true);
         
-        // // Allow requests with no origin (mobile apps, etc)
-        // if (!origin) return callback(null, true);
+        const isAllowed = allowedOrigins.some(allowed => {
+            if (typeof allowed === 'string') return allowed === origin;
+            return allowed.test(origin);
+        });
         
-        // const isAllowed = allowedOrigins.some(allowed => {
-        //     if (typeof allowed === 'string') return allowed === origin;
-        //     return allowed.test(origin);
-        // });
-        
-        // if (isAllowed) {
-        //     callback(null, true);
-        // } else {
-        //     console.warn(`❌ Blocked CORS request from: ${origin}`);
-        //     // Temporarily allow all origins for debugging - REMOVE IN PRODUCTION
-        //     if (!isProduction) {
-        //         console.warn(`🔧 Debug mode: allowing blocked origin anyway`);
-        //         callback(null, true);
-        //     } else {
-        //         callback(new Error('Not allowed by CORS'));
-        //     }
-        // }
+        if (isAllowed) {
+            console.log(`✅ Allowed CORS request from: ${origin}`);
+            callback(null, true);
+        } else {
+            console.warn(`❌ Blocked CORS request from: ${origin}`);
+            if (!isProduction) {
+                console.warn(`🔧 Debug mode: allowing blocked origin anyway`);
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        }
     },
     credentials: true,
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Debug-Key', 'X-Extension-Version']
 }));
 
 // Request size limits
@@ -663,12 +664,37 @@ function requireDebugAuth(req, res, next) {
     next();
 }
 
+// File validation function
+function validateUploadedFile(file) {
+    const allowedMimeTypes = ['application/pdf'];
+    const allowedExtensions = ['.pdf'];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    
+    if (!file) {
+        throw new Error('No file uploaded');
+    }
+    
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+        throw new Error(`Invalid file type. Only PDF files are allowed. Got: ${file.mimetype}`);
+    }
+    
+    const fileExtension = require('path').extname(file.originalname || '').toLowerCase();
+    if (!allowedExtensions.includes(fileExtension)) {
+        throw new Error(`Invalid file extension. Only .pdf files are allowed. Got: ${fileExtension}`);
+    }
+    
+    if (file.size > maxSize) {
+        throw new Error(`File too large. Maximum size is ${maxSize / (1024 * 1024)}MB. Got: ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+    }
+    
+    return true;
+}
+
 // Main parsing endpoint
 app.post('/parse-receipt', strictLimiter, upload.single('pdf'), async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No PDF file uploaded' });
-        }
+        // Validate uploaded file
+        validateUploadedFile(req.file);
 
         // Sanitize filename
         const originalname = sanitizeFilename(req.file.originalname || 'unknown.pdf');
@@ -807,7 +833,7 @@ app.get('/health', (req, res) => {
 });
 
 // Debug endpoint to test authentication without making actual Gmail calls
-app.get('/debug/auth', (req, res) => {
+app.get('/debug/auth', strictLimiter, (req, res) => {
     console.log('🔍 DEBUG AUTH CHECK');
     console.log('📋 Session exists:', !!req.session);
     console.log('🔑 Google tokens exist:', !!req.session?.googleTokens);
@@ -827,8 +853,10 @@ app.get('/debug/auth', (req, res) => {
     });
 });
 
-// Debug endpoint to test Gmail API connection
-app.get('/debug/gmail-test', async (req, res) => {
+// Debug endpoints - disabled in production
+if (!isProduction) {
+    // Debug endpoint to test Gmail API connection
+    app.get('/debug/gmail-test', strictLimiter, async (req, res) => {
     try {
         if (!req.session?.googleTokens) {
             return res.status(401).json({ error: 'Not authenticated' });
@@ -866,25 +894,29 @@ app.get('/debug/gmail-test', async (req, res) => {
             timestamp: new Date().toISOString()
         });
     }
-});
-
-// Debug endpoint to check processed emails
-app.get('/debug/processed-emails', requireDebugAuth, (req, res) => {
-    res.json({
-        processedEmailsCount: processedEmailIds.size,
-        processedEmailIds: [...processedEmailIds]
     });
-});
+}
 
-// Debug endpoint to clear processed emails (for testing)
-app.post('/debug/clear-processed', requireDebugAuth, (req, res) => {
-    processedEmailIds.clear();
-    saveProcessedEmails(processedEmailIds);
-    res.json({ message: 'Cleared processed emails', count: 0 });
-});
+// Debug endpoints - disabled in production
+if (!isProduction) {
+    // Debug endpoint to check processed emails
+    app.get('/debug/processed-emails', strictLimiter, requireDebugAuth, (req, res) => {
+        res.json({
+            processedEmailsCount: processedEmailIds.size,
+            processedEmailIds: [...processedEmailIds]
+        });
+    });
 
-// Debug endpoint to test date extraction
-app.post('/debug/test-date-extraction', requireDebugAuth, (req, res) => {
+    // Debug endpoint to clear processed emails (for testing)
+    app.post('/debug/clear-processed', strictLimiter, requireDebugAuth, (req, res) => {
+        processedEmailIds.clear();
+        saveProcessedEmails(processedEmailIds);
+        res.json({ message: 'Cleared processed emails', count: 0 });
+    });
+}
+
+// Debug endpoint to test date extraction (production-safe)
+app.post('/debug/test-date-extraction', strictLimiter, requireDebugAuth, (req, res) => {
     const { text, subject, sender, emailDate } = req.body;
 
     if (!text) {

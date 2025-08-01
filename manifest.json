@@ -9,7 +9,6 @@
   ],
   "host_permissions": [
     "https://bootleg-expensify-34h3.onrender.com/*",
-    "https://*.onrender.com/*",
     "https://www.googleapis.com/*"
   ],
   "commands": {
