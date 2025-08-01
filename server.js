@@ -46,6 +46,13 @@ const strictLimiter = rateLimit({
     message: { error: 'Too many PDF operations, please try again later' }
 });
 
+// AI-specific rate limiting to control costs
+const aiLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 10, // Limit to 10 AI calls per hour per IP
+    message: { error: 'AI processing rate limit exceeded, please try again later' }
+});
+
 // Track processed emails to prevent duplicates - persistent storage
 const PROCESSED_EMAILS_FILE = path.join(__dirname, 'processed_emails.json');
 
@@ -2698,22 +2705,100 @@ function calculateConfidence(vendor, amount, dateMatch) {
     return Math.min(score, 1.0);
 }
 
-// AI-Enhanced Email Analysis Functions
-async function analyzeEmailWithAI(emailContent, emailSubject = '', emailFrom = '') {
+// PII Scrubbing Functions for AI Safety
+function scrubPII(text) {
+    if (!text) return text;
+    
+    // Remove email addresses
+    text = text.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]');
+    
+    // Remove phone numbers
+    text = text.replace(/(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}/g, '[PHONE]');
+    
+    // Remove credit card numbers (keep last 4 digits)
+    text = text.replace(/\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|3[0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b/g, (match) => {
+        return '**** **** **** ' + match.slice(-4);
+    });
+    
+    // Remove addresses (basic pattern)
+    text = text.replace(/\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr)\b/gi, '[ADDRESS]');
+    
+    // Remove SSN-like patterns
+    text = text.replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[SSN]');
+    
+    // Remove names (common patterns - names followed by addresses or in "Dear X" format)
+    text = text.replace(/Dear\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*/g, 'Dear [NAME]');
+    
+    return text;
+}
+
+function encodeDataForAI(emailContent, emailSubject, emailFrom) {
+    // Convert actual data to semantic patterns - NO real data sent to AI
+    const crypto = require('crypto');
+    
+    // Extract patterns without exposing actual values
+    const patterns = {
+        // Hash vendor domain to preserve vendor identity without exposing actual domain
+        vendorHash: crypto.createHash('sha256').update(emailFrom.split('@')[1] || 'unknown').digest('hex').substring(0, 8),
+        
+        // Classify content types without exposing content
+        contentSignature: {
+            hasOrderPattern: /order\s*#?\s*[a-z0-9-]+/i.test(emailContent),
+            hasTrackingPattern: /tracking\s*#?\s*[a-z0-9-]+/i.test(emailContent),
+            hasAmountPattern: /\$\d+\.?\d*/g.test(emailContent),
+            hasPaymentKeywords: /paid|charged|total|subtotal|amount|purchase|receipt|invoice/i.test(emailContent),
+            hasShippingKeywords: /shipped|delivered|tracking|package/i.test(emailContent),
+            hasConfirmationKeywords: /confirmation|confirmed|thank you for|order complete/i.test(emailContent)
+        },
+        
+        // Subject pattern analysis without actual subject
+        subjectSignature: {
+            hasOrderRef: /order|purchase|receipt|invoice/i.test(emailSubject),
+            hasAmountRef: /\$\d+/g.test(emailSubject),
+            hasConfirmationRef: /confirmation|confirmed|receipt/i.test(emailSubject),
+            wordCount: emailSubject.split(/\s+/).length,
+            hasSpecialChars: /[#@$%&*]/.test(emailSubject)
+        },
+        
+        // Content structure analysis without content
+        contentStructure: {
+            length: emailContent.length,
+            hasHTML: /<[^>]+>/.test(emailContent),
+            lineCount: emailContent.split('\n').length,
+            hasLinks: /https?:\/\//.test(emailContent),
+            hasEmails: /@/.test(emailContent),
+            hasNumbers: /\d+/.test(emailContent)
+        }
+    };
+    
+    return patterns;
+}
+
+// AI-Enhanced Email Analysis Functions (Privacy-Safe)
+async function analyzeEmailWithAI(emailContent, emailSubject = '', emailFrom = '', userConsent = false) {
     console.log('🤖 Starting AI analysis of email...');
     
     if (!OPENAI_API_KEY) {
         console.log('⚠️ No OpenAI API key - falling back to pattern matching');
         return fallbackEmailAnalysis(emailContent, emailSubject, emailFrom);
     }
+    
+    if (!userConsent) {
+        console.log('🚫 User has not consented to AI processing - using pattern matching only');
+        return fallbackEmailAnalysis(emailContent, emailSubject, emailFrom);
+    }
 
     try {
+        // Use semantic encoding - send patterns, NEVER actual data
+        const encodedData = encodeDataForAI(emailContent, emailSubject, emailFrom);
+        
         const analysisPrompt = `
-You are an expert at identifying business expense receipts and transactions. Analyze this email:
+You are an expert at identifying business expense receipts and transactions. Analyze this encoded email pattern:
 
-From: ${emailFrom}
-Subject: ${emailSubject}
-Content: ${emailContent.substring(0, 2000)}
+Vendor Hash: ${encodedData.vendorHash}
+Content Signature: ${JSON.stringify(encodedData.contentSignature)}
+Subject Signature: ${JSON.stringify(encodedData.subjectSignature)}
+Content Structure: ${JSON.stringify(encodedData.contentStructure)}
 
 BUSINESS EXPENSES INCLUDE:
 ✅ Purchase receipts (Amazon, Target, etc.)
@@ -2787,7 +2872,13 @@ When in doubt about business relevance, lean toward YES with 0.4-0.6 confidence.
         return aiAnalysis;
 
     } catch (error) {
-        console.error('❌ AI analysis failed:', error);
+        // Secure error handling - don't leak user data in logs
+        console.error('❌ AI analysis failed:', {
+            error: error.message,
+            status: error.status || 'unknown',
+            hasContent: !!emailContent,
+            timestamp: new Date().toISOString()
+        });
         console.log('🔄 Falling back to pattern matching...');
         return fallbackEmailAnalysis(emailContent, emailSubject, emailFrom);
     }
@@ -2832,78 +2923,34 @@ function fallbackEmailAnalysis(emailContent, emailSubject = '', emailFrom = '') 
     };
 }
 
-async function extractAmountsWithAI(emailContent, vendor = null) {
-    console.log('💰 AI-enhanced amount extraction...');
+async function extractAmountsWithAI(emailContent, vendor = null, userConsent = false) {
+    console.log('💰 AI-enhanced amount extraction (security-first approach)...');
     
-    if (!OPENAI_API_KEY) {
-        return extractAmountsFromAmazonEmail(emailContent); // Fallback to existing function
-    }
-
-    try {
-        const extractionPrompt = `
-Extract transaction amounts from this ${vendor || 'receipt'} email:
-
-${emailContent.substring(0, 2000)}
-
-Return JSON array of amounts that represent ACTUAL TRANSACTIONS (not totals, discounts, or savings):
-{
-  "transactionAmounts": ["$45.67", "$23.45"],
-  "totalAmount": "$69.12",
-  "excludedAmounts": {
-    "$15.00": "shipping (already included in item prices)",
-    "$5.99": "discount (not a transaction)"
-  },
-  "reasoning": "explanation of extraction logic"
+    // SECURITY: Never send actual amounts to external AI - use local extraction only
+    console.log('🔒 Using secure local amount extraction - no data sent to AI');
+    return extractAmountsFromAmazonEmail(emailContent);
 }
 
-For Amazon: Extract individual item prices or shipment totals, NOT the overall order total.
-For restaurants: Extract the final total, NOT individual items.
-Exclude: discounts, savings, original prices, tax-inclusive totals when itemized.`;
-
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: 'gpt-4',
-                messages: [{ role: 'user', content: extractionPrompt }],
-                max_tokens: 400,
-                temperature: 0.1
-            })
-        });
-
-        const result = await response.json();
-        const extraction = JSON.parse(result.choices[0].message.content);
-        
-        console.log('💰 AI Amount Extraction:', {
-            found: extraction.transactionAmounts?.length || 0,
-            amounts: extraction.transactionAmounts,
-            excluded: Object.keys(extraction.excludedAmounts || {}).length
-        });
-
-        return extraction.transactionAmounts || [];
-
-    } catch (error) {
-        console.error('❌ AI amount extraction failed:', error);
-        return extractAmountsFromAmazonEmail(emailContent);
-    }
-}
-
-async function intelligentChunkingDecision(emailContent, amounts, vendor) {
+async function intelligentChunkingDecision(emailContent, amounts, vendor, userConsent = false) {
     console.log('🧠 AI chunking decision analysis...');
     
     if (!OPENAI_API_KEY || !amounts.length) {
         return amounts.length > 1; // Simple fallback
     }
+    
+    if (!userConsent) {
+        console.log('🚫 User has not consented to AI processing - using simple fallback');
+        return amounts.length > 1;
+    }
 
     try {
+        // Use minimal data for chunking decision - no email content
         const chunkingPrompt = `
 Decide how to split this ${vendor} email for expense processing:
 
 Amounts found: ${amounts.join(', ')}
-Email preview: ${emailContent.substring(0, 1000)}
+Vendor: ${vendor}
+Number of amounts: ${amounts.length}
 
 Should each amount become a separate email for expense matching?
 
