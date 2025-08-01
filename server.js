@@ -21,7 +21,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const isProduction = process.env.NODE_ENV === 'production';
 
-console.log('=== FORCING REDEPLOY - AUTH TOKEN ENDPOINT SHOULD BE AVAILABLE ===');
+console.log('=== SECURITY FIXES DEPLOYED - AUTH TOKEN ENDPOINT AVAILABLE ===');
 
 // Security middleware
 app.use(helmet({
