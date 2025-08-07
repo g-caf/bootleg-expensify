@@ -79,27 +79,58 @@ class GmailClient {
 
     async checkStoredAuth() {
         try {
-            // ONLY trust server token - don't use stored tokens
+            console.log('🔐 DEBUG: GmailClient checkStoredAuth started');
+            
+            // First check if we have a stored token locally
+            const stored = await chrome.storage.local.get(['gmailAccessToken']);
+            if (stored.gmailAccessToken) {
+                console.log('🔐 DEBUG: Found stored token, testing if still valid...');
+                // Test the stored token directly with Gmail API
+                if (await this.testToken(stored.gmailAccessToken)) {
+                    console.log('🔐 DEBUG: Stored token is valid, using it');
+                    this.accessToken = stored.gmailAccessToken;
+                    this.isAuthenticated = true;
+                    return true;
+                }
+                console.log('🔐 DEBUG: Stored token is invalid, removing...');
+                await chrome.storage.local.remove(['gmailAccessToken']);
+            }
+            
+            // No valid stored token, try to get fresh one from server
             const serverToken = await this.getTokenFromServer();
             
             if (serverToken) {
+                console.log('🔐 DEBUG: Got fresh token from server');
                 this.accessToken = serverToken;
                 this.isAuthenticated = true;
                 await chrome.storage.local.set({ gmailAccessToken: serverToken });
                 return true;
             } else {
-                // Server says not authenticated - clear any stale local data
-                await chrome.storage.local.remove(['gmailAccessToken']);
+                console.log('🔐 DEBUG: No server token, user needs to authenticate');
                 this.accessToken = null;
                 this.isAuthenticated = false;
                 return false;
             }
         } catch (error) {
-            console.error('Error checking stored auth:', error);
-            // Clear stale data on error
+            console.error('🔐 DEBUG: Error checking stored auth:', error);
             await chrome.storage.local.remove(['gmailAccessToken']);
             this.accessToken = null;
             this.isAuthenticated = false;
+            return false;
+        }
+    }
+
+    async testToken(token) {
+        try {
+            const response = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            return response.ok;
+        } catch (error) {
+            console.log('🔐 DEBUG: Token test failed:', error);
             return false;
         }
     }
