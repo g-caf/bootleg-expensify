@@ -415,9 +415,12 @@ app.get('/auth/google/callback', async (req, res) => {
             <html>
                 <body>
                     <h2>✅ Authentication Successful!</h2>
+                    <p>You can close this window now.</p>
                     <script>
-                        // Redirect to extension with auth code
-                        window.location.href = 'chrome-extension://redirect?auth=${authCode}';
+                        // Close the window after a brief delay
+                        setTimeout(() => {
+                            window.close();
+                        }, 2000);
                     </script>
                 </body>
             </html>
