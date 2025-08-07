@@ -33,6 +33,7 @@ class GmailClient {
             return new Promise((resolve) => {
                 // Listen for postMessage from OAuth callback
                 const messageHandler = async (event) => {
+                    console.log('🔐 DEBUG: Received postMessage:', event.data);
                     if (event.data && event.data.type === 'GMAIL_AUTH_SUCCESS') {
                         console.log('🔐 DEBUG: Received auth code via postMessage:', event.data.authCode);
                         window.removeEventListener('message', messageHandler);

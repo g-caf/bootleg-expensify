@@ -414,6 +414,7 @@ app.get('/auth/google/callback', async (req, res) => {
         };
         
         console.log('🔐 CALLBACK: Generated auth code for extension:', authCode);
+        console.log('🔐 CALLBACK: Auth code stored in global.tempAuthTokens');
         
         res.send(`
             <html>
@@ -485,7 +486,11 @@ app.get('/auth/token', (req, res) => {
 app.get('/auth/token/:authKey', (req, res) => {
     const { authKey } = req.params;
     
+    console.log('🔐 AUTH_KEY: Request for auth key:', authKey);
+    console.log('🔐 AUTH_KEY: Available keys:', Object.keys(global.tempAuthTokens || {}));
+    
     if (!global.tempAuthTokens || !global.tempAuthTokens[authKey]) {
+        console.log('🔐 AUTH_KEY: Token not found');
         return res.status(404).json({ error: 'Token not found or expired' });
     }
     
@@ -493,14 +498,16 @@ app.get('/auth/token/:authKey', (req, res) => {
     
     // Check if expired
     if (Date.now() > tokenData.expires) {
+        console.log('🔐 AUTH_KEY: Token expired');
         delete global.tempAuthTokens[authKey];
         return res.status(410).json({ error: 'Token expired' });
     }
     
     // Return token and delete it (one-time use)
-    const token = tokenData.token;
+    const token = tokenData.access_token; // Fixed: was tokenData.token
     delete global.tempAuthTokens[authKey];
     
+    console.log('🔐 AUTH_KEY: Returning access token to extension');
     res.json({
         access_token: token
     });
