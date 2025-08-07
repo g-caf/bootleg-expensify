@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Email Receipt Forwarder",
+  "version": "1.0",
+  "description": "Automatically forward receipts from Gmail to Airbase",
+  
+  "permissions": [
+    "storage",
+    "alarms",
+    "identity",
+    "activeTab"
+  ],
+  
+  "host_permissions": [
+    "https://www.googleapis.com/*",
+    "https://gmail.googleapis.com/*"
+  ],
+  
+  "background": {
+    "service_worker": "background.js"
+  },
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Receipt Forwarder"
+  },
+  
+  "oauth2": {
+    "client_id": "PLACEHOLDER_NEEDS_REAL_OAUTH_CREDENTIALS",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.send"
+    ]
+  }
+}

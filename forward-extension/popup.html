@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 16px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin: 0;
+    }
+    
+    .status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding: 12px;
+      border-radius: 6px;
+      background: #f5f5f5;
+    }
+    
+    .status-text {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 24px;
+      background: #ccc;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    
+    .toggle-switch.enabled {
+      background: #4CAF50;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    .toggle-switch.enabled .toggle-slider {
+      transform: translateX(24px);
+    }
+    
+    .stats {
+      margin-bottom: 16px;
+    }
+    
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #666;
+    }
+    
+    .patterns {
+      margin-bottom: 16px;
+    }
+    
+    .patterns h3 {
+      font-size: 14px;
+      margin: 0 0 8px 0;
+      color: #333;
+    }
+    
+    .pattern-list {
+      font-size: 12px;
+      color: #666;
+      line-height: 1.4;
+    }
+    
+    .pattern-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    
+    .pattern-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #4CAF50;
+      margin-right: 8px;
+    }
+    
+    .footer {
+      font-size: 11px;
+      color: #999;
+      text-align: center;
+      padding-top: 12px;
+      border-top: 1px solid #e0e0e0;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 class="title">Receipt Forwarder</h1>
+  </div>
+  
+  <div class="status">
+    <span class="status-text" id="statusText">Disabled</span>
+    <div class="toggle-switch" id="toggleSwitch">
+      <div class="toggle-slider"></div>
+    </div>
+  </div>
+  
+  <div class="stats">
+    <div class="stat-item">
+      <span>Emails forwarded:</span>
+      <span id="forwardedCount">0</span>
+    </div>
+    <div class="stat-item">
+      <span>Check interval:</span>
+      <span>12 minutes</span>
+    </div>
+    <div class="stat-item">
+      <span>Forward to:</span>
+      <span>receipts@airbase.com</span>
+    </div>
+  </div>
+  
+  <div class="patterns">
+    <h3>Monitoring for:</h3>
+    <div class="pattern-list">
+      <div class="pattern-item">
+        <div class="pattern-dot"></div>
+        <span>Amazon receipts</span>
+      </div>
+      <div class="pattern-item">
+        <div class="pattern-dot"></div>
+        <span>Uber trip receipts</span>
+      </div>
+      <div class="pattern-item">
+        <div class="pattern-dot"></div>
+        <span>DoorDash orders</span>
+      </div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    Extension will check Gmail every 12 minutes when enabled
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

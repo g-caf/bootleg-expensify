@@ -33,7 +33,7 @@
         
         .header {
             background: #1a1a1a;
-            padding: 12px 16px 8px 16px; /* Tighter spacing similar to your image */
+            padding: 12px 16px 8px 16px;
             margin-top: 0;
             display: flex;
             justify-content: space-between;
@@ -80,23 +80,23 @@
         }
         
         .main-content {
-        flex: 1;
-        background: #1a1a1a;
-        padding: 4px 16px 4px 16px; /* Match bottom padding to top padding */
-        overflow: hidden;
-        box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
-            gap: 10px; /* Slightly reduced gap for better distribution */
+            flex: 1;
+            background: #1a1a1a;
+            padding: 4px 16px 4px 16px;
+            overflow: hidden;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
         .search-bar-container {
             display: flex;
-        gap: 8px;
-        margin-bottom: 0; /* Remove margin since we use gap in parent */
+            gap: 8px;
+            margin-bottom: 0;
         }
         
-        .scan-btn {
+        .search-btn {
             background: #f44e40;
             color: white;
             border: none;
@@ -110,26 +110,22 @@
             min-width: 100px;
         }
         
-        .scan-btn:hover:not(:disabled) {
+        .search-btn:hover:not(:disabled) {
             background: #e03d2f;
         }
         
-        .scan-btn:disabled {
+        .search-btn:disabled {
             background: #d1d5db;
             cursor: not-allowed;
         }
         
-        .scan-btn.connect {
+        .search-btn.connect {
             background: #6b7280;
             color: white;
         }
         
-        .scan-btn.connect:hover:not(:disabled) {
+        .search-btn.connect:hover:not(:disabled) {
             background: #4b5563;
-        }
-        
-        .search-section {
-            margin-bottom: 0; /* Remove margin since we use gap in parent */
         }
         
         .search-input {
@@ -156,11 +152,6 @@
         .search-results {
             flex: 1;
             overflow-y: auto;
-            transition: margin-bottom 0.3s ease;
-        }
-        
-        .search-results.processing-active {
-            margin-bottom: 40px; /* Reduced space for processing message */
         }
         
         .search-result-item {
@@ -181,7 +172,7 @@
         .search-result-left {
             flex: 1;
             margin-right: 8px;
-            min-width: 0; /* Allow content to shrink */
+            min-width: 0;
             overflow: hidden;
         }
         
@@ -190,8 +181,8 @@
             flex-direction: column;
             align-items: flex-end;
             gap: 4px;
-            flex-shrink: 0; /* Prevent shrinking */
-            width: 105px; /* Fixed width for consistent button size */
+            flex-shrink: 0;
+            width: 105px;
         }
         
         .search-result-subject {
@@ -220,7 +211,7 @@
             max-width: 100%;
         }
         
-        .action-btn, .convert-btn {
+        .send-btn {
             background: #f44e40;
             color: white;
             border: none;
@@ -239,117 +230,13 @@
             justify-content: center;
         }
         
-        .convert-btn:hover:not(:disabled) {
+        .send-btn:hover:not(:disabled) {
             background: #e03d2f;
         }
         
-        .convert-btn:disabled {
+        .send-btn:disabled {
             background: #d1d5db;
             cursor: not-allowed;
-        }
-
-        /* Scan result specific styles */
-        .processed-success {
-            border-left: 4px solid #10b981;
-        }
-
-        .processed-error {
-            border-left: 4px solid #ef4444;
-        }
-
-        .extraction-data {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-            margin-top: 4px;
-        }
-
-        .vendor-badge, .amount-badge, .date-badge {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: 500;
-            white-space: nowrap;
-        }
-
-        .vendor-badge {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .amount-badge {
-            background: #d1fae5;
-            color: #047857;
-        }
-
-        .date-badge {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .process-status {
-            font-size: 10px;
-            font-weight: 500;
-            padding: 2px 6px;
-            border-radius: 4px;
-            text-align: center;
-        }
-
-        .status-success {
-            background: #d1fae5;
-            color: #047857;
-        }
-
-        .status-error {
-            background: #fee2e2;
-            color: #dc2626;
-        }
-
-        .error-message {
-            font-size: 9px;
-            color: #fca5a5;
-            margin-top: 2px;
-            text-align: right;
-            max-width: 105px;
-            word-wrap: break-word;
-        }
-
-        .warning-message {
-            font-size: 9px;
-            color: #fbbf24;
-            margin-top: 2px;
-            text-align: right;
-            max-width: 105px;
-            word-wrap: break-word;
-        }
-
-        .email-content-preview {
-            margin-top: 8px;
-            padding: 8px;
-            background: #2d3748;
-            border-radius: 4px;
-            border: 1px solid #4a5568;
-        }
-
-        .content-header {
-            font-size: 10px;
-            font-weight: 500;
-            color: #a0aec0;
-            margin-bottom: 4px;
-        }
-
-        .content-text {
-            font-size: 11px;
-            color: #e2e8f0;
-            line-height: 1.4;
-            max-height: 100px;
-            overflow: hidden;
-        }
-
-        .content-truncated {
-            color: #9ca3af;
-            font-style: italic;
         }
         
         .status {
@@ -398,285 +285,48 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
-        /* Date Range Slider Styles */
-        .date-range-container {
-            background: #374151;
-            border: 1px solid #4b5563;
-            border-radius: 8px;
-            padding: 12px;
-            margin: 0; /* Remove margin since we use gap in parent */
-            transition: all 0.3s ease;
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-        
-        .date-range-container.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        
-        .range-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-            font-size: 13px;
-            position: relative;
-        }
-        
-        .range-header label {
-            color: #d1d5db;
-            font-weight: 500;
-        }
-        
-        .range-header span {
-            color: #f44e40;
-            font-weight: 600;
-        }
-        
-        #monitoringStatus {
-            color: #d1d5db;
-            font-weight: 500;
-            font-size: 13px;
-        }
-        
-        /* Dual Range Slider Styles */
-        .dual-range-container {
-            position: relative;
-            height: 24px;
+
+        .status-message {
+            color: #9ca3af;
+            font-size: 12px;
+            text-align: center;
+            padding: 8px;
             margin: 8px 0;
         }
-        
-        .dual-range-track {
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: #4b5563;
-            border-radius: 2px;
-            transform: translateY(-50%);
-        }
-        
-        .dual-range-progress {
-            position: absolute;
-            top: 50%;
-            height: 4px;
-            background: #f44e40;
-            border-radius: 2px;
-            transform: translateY(-50%);
+
+        .status-success {
+            color: #10b981;
         }
 
-        .tick-marks {
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 0;
-            transform: translateY(-50%);
-            pointer-events: none;
+        .status-error {
+            color: #ef4444;
         }
-
-        .tick-mark {
-            position: absolute;
-            width: 2px;
-            height: 12px;
-            background: #9ca3af;
-            top: -6px;
-            transform: translateX(-50%);
-            border-radius: 1px;
-        }
-        
-        .dual-range-input {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 24px;
-            background: transparent;
-            pointer-events: none;
-            -webkit-appearance: none;
-            appearance: none;
-            outline: none;
-            margin: 0;
-            padding: 0;
-        }
-        
-        .dual-range-input::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 16px;
-            height: 16px;
-            background: #f44e40;
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            pointer-events: all;
-            position: relative;
-            top: -6px; /* Center on the 4px track */
-        }
-        
-        .dual-range-input::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 4px;
-            background: transparent;
-            border: none;
-            border-radius: 2px;
-        }
-        
-        .dual-range-input::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
-            background: #f44e40;
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            pointer-events: all;
-            position: relative;
-        }
-        
-        .dual-range-input::-moz-range-track {
-            width: 100%;
-            height: 4px;
-            background: transparent;
-            border: none;
-            border-radius: 2px;
-        }
-        
-        .range-labels {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: #9ca3af;
-            margin-top: 4px;
-            position: relative;
-        }
-
-        .tick-label {
-            position: absolute !important;
-            transform: translateX(-50%);
-            font-size: 9px;
-            color: #6b7280;
-            font-weight: 500;
-        }
-        
-        /* Scan Results Area */
-        .scan-results-area {
-            margin: 0; /* Remove margin since we use gap in parent */
-            padding: 8px 12px;
-            background: #374151;
-            border: 1px solid #4b5563;
-            border-radius: 6px;
-            opacity: 0;
-            transform: translateY(-10px);
-            transition: all 0.3s ease;
-        }
-        
-        .scan-results-area.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        
-        .scan-results-text {
-            font-size: 13px;
-            color: #d1d5db;
-            text-align: center;
-        }
-
-
-
-        .clear-btn {
-            background: #6b7280;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .clear-btn:hover {
-            background: #9ca3af;
-        }
-
-        .autoscan-results {
-            margin-top: 6px;
-            padding: 6px 8px;
-            background: #1f2937;
-            border-radius: 6px;
-            border: 1px solid #374151;
-            font-size: 12px;
-            color: #d1d5db;
-            min-height: 20px;
-        }
-
     </style>
 </head>
 <body>
     <div class="popup-container">
         <div class="header">
-        <div class="header-left">
-            <img src="SGLogo2.png" alt="Logo" class="header-logo">
-            <h1 class="header-title">airbased</h1>
-        </div>
-        <button class="close-btn" id="closeBtn">×</button>
-    </div>
-    
-    <div class="main-content">
-        <div class="status" id="status"></div>
-        <div class="loading" id="loading">
-            <div class="loading-spinner"></div>
-            Looking for receipts...
+            <div class="header-left">
+                <img src="SGLogo2.png" alt="Logo" class="header-logo">
+                <h1 class="header-title">Receipt Search</h1>
+            </div>
+            <button class="close-btn" id="closeBtn">×</button>
         </div>
         
-        <!-- Search bar as direct child -->
-        <div class="search-bar-container">
-            <input type="text" class="search-input" id="searchInput" placeholder="Search your email for receipts...">
-            <button class="scan-btn" id="gmailScanBtn" disabled>Connect to Google</button>
-        </div>
-        
-        <!-- Email monitoring interface (initially hidden) -->
-        <div class="date-range-container" id="monitoringContainer" style="display: none;">
-            <div class="range-header">
-                <label>Email Monitoring:</label>
-                <span id="monitoringStatus">Stopped</span>
+        <div class="main-content">
+            <div class="status" id="status"></div>
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                Looking for receipts...
             </div>
             
-            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                <button id="startMonitoringBtn" class="scan-btn" style="flex: 1; font-size: 12px;">Start</button>
-                <button id="stopMonitoringBtn" class="scan-btn" style="flex: 1; font-size: 12px; background: #6b7280;">Stop</button>
+            <div class="search-bar-container">
+                <input type="text" class="search-input" id="searchInput" placeholder="Search your email for receipts...">
+                <button class="search-btn" id="searchBtn" disabled>Search Gmail</button>
             </div>
             
-            <div class="range-header" style="margin-top: 8px; margin-bottom: 4px;">
-                <label>Catch up on emails:</label>
-            </div>
-            
-            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                <button id="catchup24h" class="clear-btn" style="flex: 1; min-width: 70px; font-size: 10px;">Last 24h</button>
-                <button id="catchup3d" class="clear-btn" style="flex: 1; min-width: 70px; font-size: 10px;">Last 3d</button>
-                <button id="catchup1w" class="clear-btn" style="flex: 1; min-width: 70px; font-size: 10px;">Last week</button>
-                <button id="catchupSinceStop" class="clear-btn" style="flex: 1; min-width: 70px; font-size: 10px;">Since stop</button>
-            </div>
-            
-            <div class="autoscan-results" id="monitoringResults" style="display: none; margin-top: 8px;"></div>
+            <div class="search-results" id="searchResults"></div>
         </div>
-        
-
-        
-        <!-- Scan results area as direct child -->
-        <div class="scan-results-area" id="scanResultsArea" style="display: none;">
-            <div class="scan-results-text" id="scanResultsText"></div>
-        </div>
-        
-        <!-- Search results as direct child -->
-        <div class="search-results" id="searchResults"></div>
-    </div>
-    
-
     </div>
     
     <script src="popup.js"></script>

@@ -1,6 +1,9 @@
 // Secure Background Service for Email Monitoring
 console.log('🔒 Expense Gadget Background Service Starting (Security-First)');
 
+// Import email filtering system
+importScripts('email-filters.js');
+
 // Security Configuration
 const SECURITY_CONFIG = {
     MAX_STORED_IDS: 100,           // Limit stored email IDs
@@ -16,6 +19,7 @@ class SecureEmailMonitor {
         this.isMonitoring = false;
         this.lastCheck = null;
         this.processedIds = new Set();
+        this.emailFilter = new SecureEmailFilterIntegration();
     }
 
     async init() {
@@ -117,7 +121,8 @@ class SecureEmailMonitor {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Extension-Version': chrome.runtime.getManifest().version,
-                    'X-Security-Check': 'background-monitor'
+                    'X-Security-Check': 'background-monitor',
+                    'X-Filter-Enabled': 'true'
                 },
                 body: JSON.stringify({
                     since: since,
@@ -312,6 +317,49 @@ class SecureEmailMonitor {
             return { success: false, message: error.message };
         }
     }
+
+    // Email filter testing and management methods
+    async testEmailFilter(emailData) {
+        console.log('🧪 Testing email filter...');
+        try {
+            const result = await this.emailFilter.testEmail(emailData);
+            return { 
+                success: true, 
+                result: result,
+                message: `Filter result: ${result.isReceipt ? `${result.vendor} receipt (${result.confidence}% confidence)` : 'not a receipt'}`
+            };
+        } catch (error) {
+            console.error('❌ Filter test failed:', error);
+            return { success: false, message: error.message };
+        }
+    }
+
+    async getFilterStats() {
+        try {
+            const stats = this.emailFilter.filter.getStats();
+            return { 
+                success: true, 
+                stats: stats,
+                message: `Filter cache: ${stats.processedHashes} entries (${stats.storageUsage} full)`
+            };
+        } catch (error) {
+            console.error('❌ Get filter stats failed:', error);
+            return { success: false, message: error.message };
+        }
+    }
+
+    async clearFilterCache() {
+        try {
+            const result = this.emailFilter.filter.clearCache();
+            return { 
+                success: true,
+                message: 'Filter cache cleared successfully' 
+            };
+        } catch (error) {
+            console.error('❌ Clear filter cache failed:', error);
+            return { success: false, message: error.message };
+        }
+    }
 }
 
 // Initialize secure monitor
@@ -351,6 +399,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 .then(sendResponse)
                 .catch(error => {
                     console.error('❌ Catchup error:', error);
+                    sendResponse({ success: false, message: error.message });
+                });
+            return true;
+        } else if (request.action === 'testEmailFilter') {
+            secureMonitor.testEmailFilter(request.emailData)
+                .then(sendResponse)
+                .catch(error => {
+                    console.error('❌ Filter test error:', error);
+                    sendResponse({ success: false, message: error.message });
+                });
+            return true;
+        } else if (request.action === 'getFilterStats') {
+            secureMonitor.getFilterStats()
+                .then(sendResponse)
+                .catch(error => {
+                    console.error('❌ Filter stats error:', error);
+                    sendResponse({ success: false, message: error.message });
+                });
+            return true;
+        } else if (request.action === 'clearFilterCache') {
+            secureMonitor.clearFilterCache()
+                .then(sendResponse)
+                .catch(error => {
+                    console.error('❌ Clear cache error:', error);
                     sendResponse({ success: false, message: error.message });
                 });
             return true;
