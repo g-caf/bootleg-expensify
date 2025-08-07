@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const isProduction = process.env.NODE_ENV === 'production';
 
-console.log('=== BACKEND SURGEON - MINIMAL SERVER STARTED ===');
+console.log('=== SESSION COOKIE FIX DEPLOYED - EXTENSION AUTH SHOULD PERSIST ===');
 
 // Security middleware
 app.use(helmet({
