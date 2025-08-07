@@ -397,9 +397,11 @@ app.get('/auth/google/callback', async (req, res) => {
     const { code } = req.query;
 
     try {
+        console.log('🔐 CALLBACK: Received auth code, exchanging for tokens...');
         const { tokens } = await oauth2Client.getToken(code);
         oauth2Client.setCredentials(tokens);
         req.session.googleTokens = tokens;
+        console.log('🔐 CALLBACK: Tokens saved to session:', !!tokens.access_token);
 
         // Generate a simple auth code for the extension
         const authCode = 'auth_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -415,12 +417,14 @@ app.get('/auth/google/callback', async (req, res) => {
             <html>
                 <body>
                     <h2>✅ Authentication Successful!</h2>
-                    <p>You can close this window now.</p>
+                    <p>Closing window...</p>
                     <script>
-                        // Close the window after a brief delay
+                        // Close the window immediately
+                        window.close();
+                        // Fallback for browsers that don't allow window.close()
                         setTimeout(() => {
-                            window.close();
-                        }, 2000);
+                            document.body.innerHTML = '<h2>✅ Done! You can close this tab.</h2>';
+                        }, 500);
                     </script>
                 </body>
             </html>
@@ -451,11 +455,15 @@ app.get('/auth/status', (req, res) => {
 
 // Token endpoint for extension
 app.get('/auth/token', (req, res) => {
+    console.log('🔐 TOKEN: Request from extension, session ID:', req.sessionID);
+    console.log('🔐 TOKEN: Has googleTokens in session:', !!req.session.googleTokens);
     if (req.session.googleTokens) {
+        console.log('🔐 TOKEN: Returning access token to extension');
         res.json({
             access_token: req.session.googleTokens.access_token
         });
     } else {
+        console.log('🔐 TOKEN: No tokens in session, returning 401');
         res.status(401).json({ error: 'Not authenticated' });
     }
 });
