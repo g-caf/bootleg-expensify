@@ -25,45 +25,29 @@ class GmailClient {
 
     async authenticate() {
         try {
-            // Listen for postMessage from OAuth callback
+            // Original simple approach: Open OAuth popup and poll for token
+            const authUrl = 'https://bootleg-expensify-34h3.onrender.com/auth/google';
+            console.log('🔐 DEBUG: Opening auth popup...');
+            window.open(authUrl, '_blank', 'width=500,height=600');
+
+            // Poll for authentication status
             return new Promise((resolve) => {
-                let authCompleted = false;
-                
-                const messageHandler = (event) => {
-                    console.log('🔐 DEBUG: Received postMessage:', event.data);
-                    if (event.data && event.data.type === 'GOOGLE_AUTH_SUCCESS' && !authCompleted) {
-                        authCompleted = true;
-                        console.log('🔐 DEBUG: Auth success via postMessage, fetching token...');
-                        
-                        // Get token using auth key
-                        this.getTokenByAuthKey(event.data.authKey).then(token => {
-                            if (token) {
-                                this.accessToken = token;
-                                this.isAuthenticated = true;
-                                chrome.storage.local.set({ gmailAccessToken: token });
-                                window.removeEventListener('message', messageHandler);
-                                resolve(true);
-                            } else {
-                                console.log('🔐 DEBUG: Failed to get token with auth key');
-                                resolve(false);
-                            }
-                        });
+                const checkInterval = setInterval(async () => {
+                    const token = await this.getTokenFromServer();
+                    if (token) {
+                        this.accessToken = token;
+                        this.isAuthenticated = true;
+                        await chrome.storage.local.set({ gmailAccessToken: token });
+                        clearInterval(checkInterval);
+                        console.log('🔐 DEBUG: Auth successful via polling');
+                        resolve(true);
                     }
-                };
+                }, 2000);
 
-                window.addEventListener('message', messageHandler);
-
-                // Open OAuth popup
-                const authUrl = 'https://bootleg-expensify-34h3.onrender.com/auth/google';
-                console.log('🔐 DEBUG: Opening auth popup...');
-                window.open(authUrl, '_blank', 'width=500,height=600');
-
-                // Timeout after 2 minutes
+                // Stop checking after 2 minutes
                 setTimeout(() => {
-                    if (!authCompleted) {
-                        window.removeEventListener('message', messageHandler);
-                        resolve(false);
-                    }
+                    clearInterval(checkInterval);
+                    resolve(false);
                 }, 120000);
             });
         } catch (error) {

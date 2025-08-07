@@ -59,10 +59,10 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: isProduction,
-        httpOnly: false, // Extension needs access to session cookie
-        maxAge: 4 * 60 * 60 * 1000, // 4 hours (was too short at 1h)
-        sameSite: isProduction ? 'none' : 'lax'
+        secure: false, // Extensions have issues with secure cookies
+        httpOnly: false, // Extension needs access to session cookie  
+        maxAge: 4 * 60 * 60 * 1000, // 4 hours
+        sameSite: 'none' // Required for cross-origin extension requests
     }
 }));
 
@@ -401,30 +401,12 @@ app.get('/auth/google/callback', async (req, res) => {
         oauth2Client.setCredentials(tokens);
         req.session.googleTokens = tokens;
 
-        // Store token temporarily in server memory with a random key
-        const authKey = 'auth_' + Math.random().toString(36).substr(2, 9);
-        global.tempAuthTokens = global.tempAuthTokens || {};
-        global.tempAuthTokens[authKey] = {
-            token: tokens.access_token,
-            expires: Date.now() + (5 * 60 * 1000) // 5 minutes
-        };
-
         res.send(`
             <html>
                 <body>
                     <h2>✅ Google Authentication Successful!</h2>
-                    <p>Token: ${authKey}</p>
-                    <p>Copy this token and paste it into the extension.</p>
-                    <script>
-                        // Try postMessage first
-                        if (window.opener) {
-                            window.opener.postMessage({
-                                type: 'GOOGLE_AUTH_SUCCESS',
-                                authKey: '${authKey}'
-                            }, '*');
-                            setTimeout(() => window.close(), 2000);
-                        }
-                    </script>
+                    <p>You can now close this window and return to the extension.</p>
+                    <script>window.close();</script>
                 </body>
             </html>
         `);
