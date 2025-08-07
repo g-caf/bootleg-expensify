@@ -320,7 +320,12 @@
 <span id="loadingText">Connecting...</span>
             </div>
             
-            <div class="search-bar-container">
+            <div class="search-bar-container" id="authCodeContainer" style="display: none;">
+                <input type="text" class="search-input" id="authCodeInput" placeholder="Paste auth code here...">
+                <button class="search-btn" id="submitAuthBtn">Submit Code</button>
+            </div>
+            
+            <div class="search-bar-container" id="searchContainer">
                 <input type="text" class="search-input" id="searchInput" placeholder="Search your email for receipts...">
                 <button class="search-btn" id="searchBtn" disabled>Search Gmail</button>
             </div>

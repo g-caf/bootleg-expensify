@@ -418,27 +418,50 @@ app.get('/auth/google/callback', async (req, res) => {
         
         res.send(`
             <html>
+                <head>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
+                        .auth-code { 
+                            background: #f0f0f0; 
+                            padding: 10px; 
+                            font-family: monospace; 
+                            font-size: 14px;
+                            border: 1px solid #ccc;
+                            margin: 10px 0;
+                            word-break: break-all;
+                        }
+                        button { 
+                            background: #4CAF50; 
+                            color: white; 
+                            padding: 10px 20px; 
+                            border: none; 
+                            cursor: pointer; 
+                            margin: 5px;
+                        }
+                    </style>
+                </head>
                 <body>
                     <h2>✅ Authentication Successful!</h2>
-                    <p>Closing window...</p>
+                    <p>Copy this auth code and paste it in the extension:</p>
+                    <div class="auth-code" id="authCode">${authCode}</div>
+                    <button onclick="copyToClipboard()">Copy Code</button>
+                    <button onclick="window.close()">Close Window</button>
+                    
                     <script>
-                        // Send auth code to extension via postMessage
+                        function copyToClipboard() {
+                            const authCode = document.getElementById('authCode').textContent;
+                            navigator.clipboard.writeText(authCode).then(() => {
+                                alert('Auth code copied to clipboard!');
+                            });
+                        }
+                        
+                        // Try postMessage first
                         if (window.opener) {
                             window.opener.postMessage({
                                 type: 'GMAIL_AUTH_SUCCESS',
                                 authCode: '${authCode}'
                             }, '*');
                         }
-                        
-                        // Close the window
-                        setTimeout(() => {
-                            window.close();
-                        }, 100);
-                        
-                        // Fallback for browsers that don't allow window.close()
-                        setTimeout(() => {
-                            document.body.innerHTML = '<h2>✅ Done! You can close this tab.</h2>';
-                        }, 500);
                     </script>
                 </body>
             </html>

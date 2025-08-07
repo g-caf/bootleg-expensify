@@ -69,12 +69,14 @@ class GmailClient {
                     }
                 }, 3000);
 
-                // Stop checking after 2 minutes
+                // Stop checking after 30 seconds and show auth code input
                 setTimeout(() => {
                     window.removeEventListener('message', messageHandler);
                     clearInterval(checkInterval);
+                    console.log('🔐 DEBUG: Timeout reached, showing auth code input');
+                    showAuthCodeInput();
                     resolve(false);
-                }, 120000);
+                }, 30000);
             });
         } catch (error) {
             console.error('Gmail authentication error:', error);
@@ -489,6 +491,21 @@ class ExpenseGadget {
                 }
             }
         });
+
+        // Auth code submission
+        const submitAuthBtn = document.getElementById('submitAuthBtn');
+        if (submitAuthBtn) {
+            submitAuthBtn.addEventListener('click', submitAuthCode);
+        }
+        
+        const authCodeInput = document.getElementById('authCodeInput');
+        if (authCodeInput) {
+            authCodeInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    submitAuthCode();
+                }
+            });
+        }
     }
 
     async checkGmailAuth() {
@@ -722,5 +739,53 @@ class ExpenseGadget {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+}
+
+function showAuthCodeInput() {
+    console.log('🔐 DEBUG: Showing auth code input');
+    const expenseGadget = window.expenseGadget;
+    if (expenseGadget) {
+        expenseGadget.showLoading(false);
+    }
+    document.getElementById('authCodeContainer').style.display = 'flex';
+    document.getElementById('searchContainer').style.display = 'none';
+    const loadingText = document.getElementById('loadingText');
+    if (loadingText) {
+        loadingText.textContent = 'Paste the auth code from the popup window';
+    }
+}
+
+async function submitAuthCode() {
+    const authCode = document.getElementById('authCodeInput').value.trim();
+    if (!authCode) {
+        alert('Please enter the auth code');
+        return;
+    }
+    
+    console.log('🔐 DEBUG: Submitting auth code:', authCode);
+    const expenseGadget = window.expenseGadget;
+    if (!expenseGadget || !expenseGadget.gmailClient) {
+        alert('Gmail client not initialized');
+        return;
+    }
+    
+    expenseGadget.showLoading(true, 'Verifying auth code...');
+    
+    const token = await expenseGadget.gmailClient.getTokenByAuthKey(authCode);
+    if (token) {
+        expenseGadget.gmailClient.accessToken = token;
+        expenseGadget.gmailClient.isAuthenticated = true;
+        await chrome.storage.local.set({ gmailAccessToken: token });
+        console.log('🔐 DEBUG: Auth successful via manual auth code');
+        
+        // Hide auth code input and show search
+        document.getElementById('authCodeContainer').style.display = 'none';
+        document.getElementById('searchContainer').style.display = 'flex';
+        expenseGadget.showLoading(false);
+        expenseGadget.updateConnectButton();
+    } else {
+        expenseGadget.showLoading(false);
+        alert('Invalid or expired auth code. Please try again.');
     }
 }
