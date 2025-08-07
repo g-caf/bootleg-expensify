@@ -57,12 +57,12 @@ if (!process.env.SESSION_SECRET) {
 app.use(session({
     secret: process.env.SESSION_SECRET || 'expense-gadget-fallback-' + Date.now(),
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: true, // Changed: Create session for extension requests
     cookie: { 
         secure: false, // Extensions have issues with secure cookies
         httpOnly: false, // Extension needs access to session cookie  
         maxAge: 4 * 60 * 60 * 1000, // 4 hours
-        sameSite: 'none' // Required for cross-origin extension requests
+        sameSite: 'lax' // Changed: Try 'lax' instead of 'none'
     }
 }));
 
@@ -402,19 +402,7 @@ app.get('/auth/google/callback', async (req, res) => {
         oauth2Client.setCredentials(tokens);
         req.session.googleTokens = tokens;
         console.log('🔐 CALLBACK: Tokens saved to session:', !!tokens.access_token);
-
-        // Generate a simple auth code for the extension
-        const authCode = 'auth_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        
-        // Store token with auth code (in-memory, 10 minute expiry)
-        global.tempAuthTokens = global.tempAuthTokens || {};
-        global.tempAuthTokens[authCode] = {
-            access_token: tokens.access_token,
-            expires: Date.now() + (10 * 60 * 1000) // 10 minutes
-        };
-        
-        console.log('🔐 CALLBACK: Generated auth code for extension:', authCode);
-        console.log('🔐 CALLBACK: Auth code stored in global.tempAuthTokens');
+        console.log('🔐 CALLBACK: Session ID:', req.sessionID);
         
         res.send(`
             <html>
@@ -442,26 +430,9 @@ app.get('/auth/google/callback', async (req, res) => {
                 </head>
                 <body>
                     <h2>✅ Authentication Successful!</h2>
-                    <p>Copy this auth code and paste it in the extension:</p>
-                    <div class="auth-code" id="authCode">${authCode}</div>
-                    <button onclick="copyToClipboard()">Copy Code</button>
-                    <button onclick="window.close()">Close Window</button>
-                    
+                    <p>You can close this window.</p>
                     <script>
-                        function copyToClipboard() {
-                            const authCode = document.getElementById('authCode').textContent;
-                            navigator.clipboard.writeText(authCode).then(() => {
-                                alert('Auth code copied to clipboard!');
-                            });
-                        }
-                        
-                        // Try postMessage first
-                        if (window.opener) {
-                            window.opener.postMessage({
-                                type: 'GMAIL_AUTH_SUCCESS',
-                                authCode: '${authCode}'
-                            }, '*');
-                        }
+                        window.close();
                     </script>
                 </body>
             </html>
