@@ -27,19 +27,27 @@ class GmailClient {
         try {
             // Listen for postMessage from OAuth callback
             return new Promise((resolve) => {
+                let authCompleted = false;
+                
                 const messageHandler = (event) => {
                     console.log('🔐 DEBUG: Received postMessage:', event.data);
-                    if (event.data && event.data.type === 'GOOGLE_AUTH_SUCCESS') {
-                        console.log('🔐 DEBUG: Auth success, saving token...');
-                        this.accessToken = event.data.access_token;
-                        this.isAuthenticated = true;
-                        chrome.storage.local.set({ gmailAccessToken: event.data.access_token });
-                        window.removeEventListener('message', messageHandler);
-                        resolve(true);
-                    } else if (event.data && event.data.type === 'GOOGLE_AUTH_ERROR') {
-                        console.log('🔐 DEBUG: Auth error:', event.data.error);
-                        window.removeEventListener('message', messageHandler);
-                        resolve(false);
+                    if (event.data && event.data.type === 'GOOGLE_AUTH_SUCCESS' && !authCompleted) {
+                        authCompleted = true;
+                        console.log('🔐 DEBUG: Auth success via postMessage, fetching token...');
+                        
+                        // Get token using auth key
+                        this.getTokenByAuthKey(event.data.authKey).then(token => {
+                            if (token) {
+                                this.accessToken = token;
+                                this.isAuthenticated = true;
+                                chrome.storage.local.set({ gmailAccessToken: token });
+                                window.removeEventListener('message', messageHandler);
+                                resolve(true);
+                            } else {
+                                console.log('🔐 DEBUG: Failed to get token with auth key');
+                                resolve(false);
+                            }
+                        });
                     }
                 };
 
@@ -52,8 +60,10 @@ class GmailClient {
 
                 // Timeout after 2 minutes
                 setTimeout(() => {
-                    window.removeEventListener('message', messageHandler);
-                    resolve(false);
+                    if (!authCompleted) {
+                        window.removeEventListener('message', messageHandler);
+                        resolve(false);
+                    }
                 }, 120000);
             });
         } catch (error) {
@@ -81,6 +91,26 @@ class GmailClient {
             }
         } catch (error) {
             console.error('🔐 DEBUG: Error fetching token from server:', error);
+        }
+        return null;
+    }
+
+    async getTokenByAuthKey(authKey) {
+        try {
+            console.log('🔐 DEBUG: Fetching token by auth key:', authKey);
+            const response = await fetch(`https://bootleg-expensify-34h3.onrender.com/auth/token/${authKey}`);
+            console.log('🔐 DEBUG: Auth key response status:', response.status);
+            if (response.ok) {
+                const data = await response.json();
+                console.log('🔐 DEBUG: Got token via auth key');
+                return data.access_token;
+            } else {
+                console.log('🔐 DEBUG: Auth key failed:', response.status);
+                const errorText = await response.text();
+                console.log('🔐 DEBUG: Auth key error:', errorText);
+            }
+        } catch (error) {
+            console.error('🔐 DEBUG: Error fetching token by auth key:', error);
         }
         return null;
     }

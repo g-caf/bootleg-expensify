@@ -401,20 +401,29 @@ app.get('/auth/google/callback', async (req, res) => {
         oauth2Client.setCredentials(tokens);
         req.session.googleTokens = tokens;
 
+        // Store token temporarily in server memory with a random key
+        const authKey = 'auth_' + Math.random().toString(36).substr(2, 9);
+        global.tempAuthTokens = global.tempAuthTokens || {};
+        global.tempAuthTokens[authKey] = {
+            token: tokens.access_token,
+            expires: Date.now() + (5 * 60 * 1000) // 5 minutes
+        };
+
         res.send(`
             <html>
                 <body>
                     <h2>✅ Google Authentication Successful!</h2>
-                    <p>Connecting to extension...</p>
+                    <p>Token: ${authKey}</p>
+                    <p>Copy this token and paste it into the extension.</p>
                     <script>
-                        // Send token directly to extension
+                        // Try postMessage first
                         if (window.opener) {
                             window.opener.postMessage({
                                 type: 'GOOGLE_AUTH_SUCCESS',
-                                access_token: '${tokens.access_token}'
+                                authKey: '${authKey}'
                             }, '*');
+                            setTimeout(() => window.close(), 2000);
                         }
-                        setTimeout(() => window.close(), 1000);
                     </script>
                 </body>
             </html>
@@ -452,6 +461,31 @@ app.get('/auth/token', (req, res) => {
     } else {
         res.status(401).json({ error: 'Not authenticated' });
     }
+});
+
+// Get token by auth key (for extension)
+app.get('/auth/token/:authKey', (req, res) => {
+    const { authKey } = req.params;
+    
+    if (!global.tempAuthTokens || !global.tempAuthTokens[authKey]) {
+        return res.status(404).json({ error: 'Token not found or expired' });
+    }
+    
+    const tokenData = global.tempAuthTokens[authKey];
+    
+    // Check if expired
+    if (Date.now() > tokenData.expires) {
+        delete global.tempAuthTokens[authKey];
+        return res.status(410).json({ error: 'Token expired' });
+    }
+    
+    // Return token and delete it (one-time use)
+    const token = tokenData.token;
+    delete global.tempAuthTokens[authKey];
+    
+    res.json({
+        access_token: token
+    });
 });
 
 // ===========================================
