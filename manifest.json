@@ -4,8 +4,7 @@
   "version": "1.0",
   "description": "Automatically process and organize expense receipts",
   "permissions": [
-    "storage",
-    "alarms"
+    "storage"
   ],
   "host_permissions": [
     "https://bootleg-expensify-34h3.onrender.com/*",
@@ -20,9 +19,6 @@
       "description": "Open Expense Gadget"
     }
   },
-  "background": {
-    "service_worker": "background.js"
-  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "Expense Gadget"
@@ -36,6 +32,5 @@
 
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';"
-  },
-
+  }
 }

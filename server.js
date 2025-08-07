@@ -405,8 +405,17 @@ app.get('/auth/google/callback', async (req, res) => {
             <html>
                 <body>
                     <h2>✅ Google Authentication Successful!</h2>
-                    <p>You can now close this window and return to the extension.</p>
-                    <script>window.close();</script>
+                    <p>Connecting to extension...</p>
+                    <script>
+                        // Send token directly to extension
+                        if (window.opener) {
+                            window.opener.postMessage({
+                                type: 'GOOGLE_AUTH_SUCCESS',
+                                access_token: '${tokens.access_token}'
+                            }, '*');
+                        }
+                        setTimeout(() => window.close(), 1000);
+                    </script>
                 </body>
             </html>
         `);

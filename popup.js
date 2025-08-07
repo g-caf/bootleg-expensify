@@ -25,26 +25,34 @@ class GmailClient {
 
     async authenticate() {
         try {
-            // Use the existing server-side Google OAuth flow
-            const authUrl = 'https://bootleg-expensify-34h3.onrender.com/auth/google';
-            window.open(authUrl, '_blank', 'width=500,height=600');
-
-            // Check for authentication status periodically
+            // Listen for postMessage from OAuth callback
             return new Promise((resolve) => {
-                const checkInterval = setInterval(async () => {
-                    const token = await this.getTokenFromServer();
-                    if (token) {
-                        this.accessToken = token;
+                const messageHandler = (event) => {
+                    console.log('🔐 DEBUG: Received postMessage:', event.data);
+                    if (event.data && event.data.type === 'GOOGLE_AUTH_SUCCESS') {
+                        console.log('🔐 DEBUG: Auth success, saving token...');
+                        this.accessToken = event.data.access_token;
                         this.isAuthenticated = true;
-                        await chrome.storage.local.set({ gmailAccessToken: token });
-                        clearInterval(checkInterval);
+                        chrome.storage.local.set({ gmailAccessToken: event.data.access_token });
+                        window.removeEventListener('message', messageHandler);
                         resolve(true);
+                    } else if (event.data && event.data.type === 'GOOGLE_AUTH_ERROR') {
+                        console.log('🔐 DEBUG: Auth error:', event.data.error);
+                        window.removeEventListener('message', messageHandler);
+                        resolve(false);
                     }
-                }, 2000);
+                };
 
-                // Stop checking after 2 minutes
+                window.addEventListener('message', messageHandler);
+
+                // Open OAuth popup
+                const authUrl = 'https://bootleg-expensify-34h3.onrender.com/auth/google';
+                console.log('🔐 DEBUG: Opening auth popup...');
+                window.open(authUrl, '_blank', 'width=500,height=600');
+
+                // Timeout after 2 minutes
                 setTimeout(() => {
-                    clearInterval(checkInterval);
+                    window.removeEventListener('message', messageHandler);
                     resolve(false);
                 }, 120000);
             });
