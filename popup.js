@@ -497,7 +497,7 @@ class ExpenseGadget {
 
     async handleGmailAuth() {
         try {
-            this.showLoading(true);
+            this.showLoading(true, 'Connecting to Google...');
             const success = await this.gmailClient.authenticate();
             
             if (success) {
@@ -643,10 +643,12 @@ class ExpenseGadget {
         searchResults.innerHTML = '';
     }
 
-    showLoading(show) {
+    showLoading(show, text = 'Looking for receipts...') {
         const loading = document.getElementById('loading');
+        const loadingText = document.getElementById('loadingText');
         if (show) {
             loading.classList.add('show');
+            if (loadingText) loadingText.textContent = text;
         } else {
             loading.classList.remove('show');
         }

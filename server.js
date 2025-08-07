@@ -401,12 +401,24 @@ app.get('/auth/google/callback', async (req, res) => {
         oauth2Client.setCredentials(tokens);
         req.session.googleTokens = tokens;
 
+        // Generate a simple auth code for the extension
+        const authCode = 'auth_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        
+        // Store token with auth code (in-memory, 10 minute expiry)
+        global.authTokens = global.authTokens || {};
+        global.authTokens[authCode] = {
+            access_token: tokens.access_token,
+            expires: Date.now() + (10 * 60 * 1000) // 10 minutes
+        };
+        
         res.send(`
             <html>
                 <body>
-                    <h2>✅ Google Authentication Successful!</h2>
-                    <p>You can now close this window and return to the extension.</p>
-                    <script>window.close();</script>
+                    <h2>✅ Authentication Successful!</h2>
+                    <script>
+                        // Redirect to extension with auth code
+                        window.location.href = 'chrome-extension://redirect?auth=${authCode}';
+                    </script>
                 </body>
             </html>
         `);
