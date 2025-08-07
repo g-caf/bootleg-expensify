@@ -59,10 +59,10 @@ app.use(session({
     resave: false,
     saveUninitialized: true, // Changed: Create session for extension requests
     cookie: { 
-        secure: false, // Extensions have issues with secure cookies
+        secure: true, // Required for sameSite: 'none' 
         httpOnly: false, // Extension needs access to session cookie  
         maxAge: 4 * 60 * 60 * 1000, // 4 hours
-        sameSite: 'lax' // Changed: Try 'lax' instead of 'none'
+        sameSite: 'none' // Extensions need 'none' for cross-origin requests
     }
 }));
 
