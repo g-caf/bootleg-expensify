@@ -25,27 +25,52 @@ class GmailClient {
 
     async authenticate() {
         try {
-            // Original simple approach: Open OAuth popup and poll for token
+            // Use postMessage approach with auth code
             const authUrl = 'https://bootleg-expensify-34h3.onrender.com/auth/google';
             console.log('🔐 DEBUG: Opening auth popup...');
-            window.open(authUrl, '_blank', 'width=500,height=600');
+            const popup = window.open(authUrl, '_blank', 'width=500,height=600');
 
-            // Poll for authentication status
             return new Promise((resolve) => {
+                // Listen for postMessage from OAuth callback
+                const messageHandler = async (event) => {
+                    if (event.data && event.data.type === 'GMAIL_AUTH_SUCCESS') {
+                        console.log('🔐 DEBUG: Received auth code via postMessage:', event.data.authCode);
+                        window.removeEventListener('message', messageHandler);
+                        
+                        // Get token using auth code
+                        const token = await this.getTokenByAuthKey(event.data.authCode);
+                        if (token) {
+                            this.accessToken = token;
+                            this.isAuthenticated = true;
+                            await chrome.storage.local.set({ gmailAccessToken: token });
+                            console.log('🔐 DEBUG: Auth successful via postMessage');
+                            resolve(true);
+                        } else {
+                            console.log('🔐 DEBUG: Failed to get token with auth code');
+                            resolve(false);
+                        }
+                    }
+                };
+
+                window.addEventListener('message', messageHandler);
+
+                // Fallback: Poll for authentication if postMessage doesn't work
                 const checkInterval = setInterval(async () => {
                     const token = await this.getTokenFromServer();
                     if (token) {
+                        window.removeEventListener('message', messageHandler);
+                        clearInterval(checkInterval);
                         this.accessToken = token;
                         this.isAuthenticated = true;
                         await chrome.storage.local.set({ gmailAccessToken: token });
-                        clearInterval(checkInterval);
-                        console.log('🔐 DEBUG: Auth successful via polling');
+                        console.log('🔐 DEBUG: Auth successful via polling fallback');
                         resolve(true);
                     }
-                }, 2000);
+                }, 3000);
 
                 // Stop checking after 2 minutes
                 setTimeout(() => {
+                    window.removeEventListener('message', messageHandler);
                     clearInterval(checkInterval);
                     resolve(false);
                 }, 120000);

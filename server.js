@@ -407,11 +407,13 @@ app.get('/auth/google/callback', async (req, res) => {
         const authCode = 'auth_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
         // Store token with auth code (in-memory, 10 minute expiry)
-        global.authTokens = global.authTokens || {};
-        global.authTokens[authCode] = {
+        global.tempAuthTokens = global.tempAuthTokens || {};
+        global.tempAuthTokens[authCode] = {
             access_token: tokens.access_token,
             expires: Date.now() + (10 * 60 * 1000) // 10 minutes
         };
+        
+        console.log('🔐 CALLBACK: Generated auth code for extension:', authCode);
         
         res.send(`
             <html>
@@ -419,8 +421,19 @@ app.get('/auth/google/callback', async (req, res) => {
                     <h2>✅ Authentication Successful!</h2>
                     <p>Closing window...</p>
                     <script>
-                        // Close the window immediately
-                        window.close();
+                        // Send auth code to extension via postMessage
+                        if (window.opener) {
+                            window.opener.postMessage({
+                                type: 'GMAIL_AUTH_SUCCESS',
+                                authCode: '${authCode}'
+                            }, '*');
+                        }
+                        
+                        // Close the window
+                        setTimeout(() => {
+                            window.close();
+                        }, 100);
+                        
                         // Fallback for browsers that don't allow window.close()
                         setTimeout(() => {
                             document.body.innerHTML = '<h2>✅ Done! You can close this tab.</h2>';
