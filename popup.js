@@ -56,15 +56,23 @@ class GmailClient {
 
     async getTokenFromServer() {
         try {
+            console.log('🔐 DEBUG: Fetching token from server...');
             const response = await fetch('https://bootleg-expensify-34h3.onrender.com/auth/token', {
                 credentials: 'include'
             });
+            console.log('🔐 DEBUG: Server response status:', response.status);
             if (response.ok) {
                 const data = await response.json();
+                console.log('🔐 DEBUG: Server response data keys:', Object.keys(data));
+                console.log('🔐 DEBUG: Has access_token:', !!data.access_token);
                 return data.access_token;
+            } else {
+                console.log('🔐 DEBUG: Server response not ok:', response.status, response.statusText);
+                const errorText = await response.text();
+                console.log('🔐 DEBUG: Error response body:', errorText);
             }
         } catch (error) {
-            console.error('Error fetching token from server:', error);
+            console.error('🔐 DEBUG: Error fetching token from server:', error);
         }
         return null;
     }
